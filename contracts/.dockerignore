@@ -1,0 +1,8 @@
+target/
+artifacts/
+.git/
+.gitignore
+*.md
+*.sh
+.env*
+node_modules/

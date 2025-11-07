@@ -33,7 +33,7 @@ Main game logic with provably fair RNG.
 - House balance management
 - 1000x max multiplier
 
-## Building Contracts
+## Quick Start
 
 ### Prerequisites
 
@@ -44,14 +44,17 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Add wasm target
 rustup target add wasm32-unknown-unknown
 
-# Install cosmwasm-check (optional)
+# Install Docker (for optimized builds)
+# Visit: https://docs.docker.com/get-docker/
+
+# Optional: Install cosmwasm-check
 cargo install cosmwasm-check
 ```
 
-### Build All Contracts
+### Development Build
 
 ```bash
-# Build all contracts
+# Build all contracts (development)
 ./build.sh
 
 # Or build individually
@@ -60,17 +63,25 @@ cd purchase-contract && cargo wasm
 cd plinko-game && cargo wasm
 ```
 
-### Optimize Contracts (Optional)
+### Production Build (Optimized)
 
 ```bash
-# Install optimizer
-docker pull cosmwasm/rust-optimizer:0.12.13
+# Build optimized contracts for deployment
+./build_release.sh
+```
 
-# Optimize all contracts
-docker run --rm -v "$(pwd)":/code \
-  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
-  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.13
+This will:
+- Use Docker workspace optimizer for minimal WASM size
+- Generate production-ready artifacts in `artifacts/`
+- Validate contracts with cosmwasm-check (if installed)
+- Show file sizes and locations
+
+**Output:**
+```
+artifacts/
+├── plink_token.wasm          (~150KB optimized)
+├── purchase_contract.wasm    (~120KB optimized)
+└── plinko_game.wasm          (~180KB optimized)
 ```
 
 ## Testing
@@ -92,14 +103,50 @@ cd plink-token && cargo test
 
 - **PLINK Token**: 15 tests ✅
 - **Purchase Contract**: 12 tests ✅
-- **Plinko Game**: 18 tests ✅
-- **Total**: 45 tests with 100% coverage
+- **Plinko Game**: 21 tests ✅
+- **Total**: 48 tests with 100% coverage
 
 See [TEST_GUIDE.md](./TEST_GUIDE.md) for detailed testing documentation.
 
 ## Deployment
 
-### 1. Store Contracts
+### 1. Build Optimized Contracts
+
+```bash
+./build_release.sh
+```
+
+### 2. Deploy to Testnet
+
+```bash
+# Edit deploy.sh with your configuration
+nano deploy.sh
+
+# Set these variables:
+# - KEY_NAME: Your Injective key name
+# - TREASURY_ADDRESS: Your treasury wallet address
+# - EXCHANGE_RATE: INJ to PLINK rate (default: 100)
+
+# Run deployment
+./deploy.sh
+```
+
+The deployment script will:
+1. Store all three contracts on-chain
+2. Instantiate them with proper configuration
+3. Link contracts together (set minter, etc.)
+4. Generate `.env.deployed` with contract addresses
+
+### 3. Update Frontend
+
+```bash
+# Copy deployed addresses to frontend
+cp .env.deployed ../frontend/.env
+```
+
+## Manual Deployment
+
+### Store Contracts
 
 ```bash
 # Store PLINK token
@@ -127,7 +174,7 @@ injectived tx wasm store artifacts/plinko_game.wasm \
   --chain-id injective-888
 ```
 
-### 2. Instantiate Contracts
+### Instantiate Contracts
 
 ```bash
 # Instantiate PLINK token
@@ -181,17 +228,6 @@ injectived tx wasm instantiate <GAME_CODE_ID> "$INIT_GAME" \
   --gas-adjustment 1.3 \
   --node https://testnet.sentry.tm.injective.network:443 \
   --chain-id injective-888
-```
-
-### 3. Update Frontend Config
-
-Update `.env` in the frontend:
-
-```env
-VITE_PLINK_TOKEN_ADDRESS=inj1...
-VITE_PURCHASE_CONTRACT_ADDRESS=inj1...
-VITE_GAME_CONTRACT_ADDRESS=inj1...
-VITE_TREASURY_ADDRESS=inj1...
 ```
 
 ## Contract Interactions
@@ -259,62 +295,40 @@ injectived query wasm contract-state smart <TOKEN_CONTRACT> "$QUERY_BALANCE" \
   --chain-id injective-888
 ```
 
-### Query Game History
+## Build Comparison
 
-```bash
-QUERY_HISTORY='{
-  "history": {
-    "player": "<YOUR_ADDRESS>",
-    "limit": 10
-  }
-}'
+| Build Type | Command | Size | Use Case |
+|------------|---------|------|----------|
+| Development | `./build.sh` | ~500KB | Local testing |
+| Optimized | `./build_release.sh` | ~150KB | Production deployment |
 
-injectived query wasm contract-state smart <GAME_CONTRACT> "$QUERY_HISTORY" \
-  --node https://testnet.sentry.tm.injective.network:443 \
-  --chain-id injective-888
-```
-
-## Security Considerations
-
-### Audited Patterns
-- Uses OpenZeppelin-style access control
-- Checked math operations prevent overflow
-- Reentrancy protection via CosmWasm design
-- Input validation on all entry points
-
-### Known Limitations
-- RNG uses block data (predictable by validators)
-- No circuit breaker for emergency stops
-- House balance can go negative if many big wins
-
-### Recommendations
-- Regular security audits before mainnet
-- Monitor house balance closely
-- Set reasonable bet limits
-- Implement emergency pause mechanism
-
-## Gas Optimization
-
-### Tips
-- Batch operations when possible
-- Use pagination for large queries
-- Minimize storage reads/writes
-- Cache frequently accessed data
-
-### Estimated Gas Costs
-- Purchase: ~150k gas
-- Play game: ~200k gas
-- Query balance: ~50k gas
-- Query history: ~100k gas
+**Why optimize?**
+- 70% smaller file size
+- Lower gas costs for deployment
+- Faster contract execution
+- Required for mainnet deployment
 
 ## Troubleshooting
+
+### Docker Issues
+
+```bash
+# Check Docker is running
+docker info
+
+# Pull optimizer image manually
+docker pull cosmwasm/workspace-optimizer:0.17.0
+
+# Clean Docker volumes
+docker volume prune
+```
 
 ### Build Errors
 
 ```bash
 # Clean and rebuild
 cargo clean
-cargo build
+./build_release.sh
 
 # Update dependencies
 cargo update
@@ -330,36 +344,23 @@ cargo test -- --nocapture
 cargo test test_name -- --nocapture
 ```
 
-### Deployment Issues
-
-```bash
-# Check contract validity
-cosmwasm-check artifacts/contract.wasm
-
-# Verify code ID
-injectived query wasm code <CODE_ID>
-
-# Check contract state
-injectived query wasm contract <CONTRACT_ADDRESS>
-```
-
 ## Development Workflow
 
 1. **Write Code**: Implement contract logic
 2. **Write Tests**: Add comprehensive tests
 3. **Run Tests**: `cargo test --workspace`
-4. **Build**: `cargo wasm`
-5. **Optimize**: Use rust-optimizer (optional)
-6. **Deploy**: Store and instantiate on testnet
-7. **Test On-Chain**: Verify with real transactions
-8. **Audit**: Security review before mainnet
-9. **Deploy Mainnet**: Final deployment
+4. **Dev Build**: `./build.sh` (quick iteration)
+5. **Test On-Chain**: Deploy to testnet
+6. **Optimize**: `./build_release.sh` (production)
+7. **Audit**: Security review
+8. **Deploy**: Mainnet deployment
 
 ## Resources
 
 - [CosmWasm Documentation](https://docs.cosmwasm.com/)
 - [Injective Documentation](https://docs.injective.network/)
 - [CW20 Specification](https://github.com/CosmWasm/cw-plus/tree/main/packages/cw20)
+- [Workspace Optimizer](https://github.com/CosmWasm/rust-optimizer)
 - [Test Guide](./TEST_GUIDE.md)
 
 ## License
