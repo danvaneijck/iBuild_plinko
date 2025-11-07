@@ -1,144 +1,108 @@
+// src/components/GameControls.tsx
+
 import React, { useState } from 'react';
-import { Play, Settings, Loader } from 'lucide-react';
 import { Difficulty, RiskLevel } from '../types/game';
 
 interface GameControlsProps {
-  onPlay: (difficulty: Difficulty, riskLevel: RiskLevel, betAmount: string) => Promise<void>;
+  onPlay: (betAmount: string) => void;
   plinkBalance: string;
-  disabled?: boolean;
-  isLoading?: boolean;
+  disabled: boolean;
+  isLoading: boolean;
+  difficulty: Difficulty;
+  riskLevel: RiskLevel;
+  onDifficultyChange: (difficulty: Difficulty) => void;
+  onRiskLevelChange: (riskLevel: RiskLevel) => void;
 }
 
-export const GameControls: React.FC<GameControlsProps> = ({ 
-  onPlay, 
-  plinkBalance, 
+export const GameControls: React.FC<GameControlsProps> = ({
+  onPlay,
+  plinkBalance,
   disabled,
-  isLoading = false 
+  isLoading,
+  difficulty,
+  riskLevel,
+  onDifficultyChange,
+  onRiskLevelChange,
 }) => {
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [riskLevel, setRiskLevel] = useState<RiskLevel>('medium');
   const [betAmount, setBetAmount] = useState('10');
-  const [error, setError] = useState('');
 
-  const handlePlay = async () => {
-    if (parseFloat(betAmount) > parseFloat(plinkBalance)) {
-      setError('Insufficient $PLINK balance!');
-      return;
-    }
-    if (parseFloat(betAmount) <= 0) {
-      setError('Bet amount must be greater than 0!');
-      return;
-    }
-
-    try {
-      setError('');
-      await onPlay(difficulty, riskLevel, betAmount);
-    } catch (err: any) {
-      setError(err.message || 'Failed to play game');
+  const handlePlayClick = () => {
+    if (!disabled && !isLoading) {
+      onPlay(betAmount);
     }
   };
 
+  const difficulties: Difficulty[] = ['easy', 'medium', 'hard'];
+  const riskLevels: RiskLevel[] = ['low', 'medium', 'high'];
+
+  const getButtonClass = (isActive: boolean) =>
+    `px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${isActive
+      ? 'bg-purple-600 text-white shadow-md'
+      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+    }`;
+
   return (
-    <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-xl">
-      <div className="flex items-center gap-2 mb-6">
-        <Settings className="text-purple-500" size={24} />
-        <h2 className="text-2xl font-bold text-white">Game Settings</h2>
+    <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 space-y-6 shadow-xl">
+      <div>
+        <label className="text-sm font-medium text-gray-400">Bet Amount</label>
+        <div className="mt-2 flex">
+          <input
+            type="number"
+            value={betAmount}
+            onChange={(e) => setBetAmount(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-700 rounded-l-lg p-3 text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            placeholder="Enter amount"
+            disabled={disabled || isLoading}
+          />
+          <button
+            onClick={() => setBetAmount(String(parseFloat(betAmount) / 2))}
+            className="bg-gray-700 px-4 hover:bg-gray-600 text-white"
+            disabled={disabled || isLoading}
+          >
+            ½
+          </button>
+          <button
+            onClick={() => setBetAmount(String(parseFloat(betAmount) * 2))}
+            className="bg-gray-700 px-4 hover:bg-gray-600 text-white rounded-r-lg"
+            disabled={disabled || isLoading}
+          >
+            2x
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Your balance: <span className="font-bold text-purple-400">{plinkBalance} $PLINK</span>
+        </p>
       </div>
 
-      <div className="space-y-6">
-        {/* Difficulty */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-400 mb-3">Difficulty</label>
-          <div className="grid grid-cols-3 gap-3">
-            {(['easy', 'medium', 'hard'] as Difficulty[]).map((diff) => (
-              <button
-                key={diff}
-                onClick={() => setDifficulty(diff)}
-                disabled={disabled || isLoading}
-                className={`py-3 px-4 rounded-xl font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  difficulty === diff
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                {diff.charAt(0).toUpperCase() + diff.slice(1)}
-                <div className="text-xs mt-1 opacity-75">
-                  {diff === 'easy' ? '8 rows' : diff === 'medium' ? '12 rows' : '16 rows'}
-                </div>
-              </button>
-            ))}
-          </div>
+      <div>
+        <label className="text-sm font-medium text-gray-400">Difficulty (Rows)</label>
+        <div className="grid grid-cols-3 gap-2 mt-2">
+          {difficulties.map((d) => (
+            <button key={d} onClick={() => onDifficultyChange(d)} className={getButtonClass(difficulty === d)}>
+              {d.charAt(0).toUpperCase() + d.slice(1)}
+            </button>
+          ))}
         </div>
-
-        {/* Risk Level */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-400 mb-3">Risk Level</label>
-          <div className="grid grid-cols-3 gap-3">
-            {(['low', 'medium', 'high'] as RiskLevel[]).map((risk) => (
-              <button
-                key={risk}
-                onClick={() => setRiskLevel(risk)}
-                disabled={disabled || isLoading}
-                className={`py-3 px-4 rounded-xl font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  riskLevel === risk
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                {risk.charAt(0).toUpperCase() + risk.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Bet Amount */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-400 mb-3">Bet Amount ($PLINK)</label>
-          <div className="relative">
-            <input
-              type="number"
-              value={betAmount}
-              onChange={(e) => {
-                setBetAmount(e.target.value);
-                setError('');
-              }}
-              disabled={disabled || isLoading}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50"
-              placeholder="Enter bet amount"
-              min="0"
-              step="0.01"
-            />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
-              Balance: {plinkBalance}
-            </div>
-          </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-3">
-            <p className="text-sm text-red-400">{error}</p>
-          </div>
-        )}
-
-        {/* Play Button */}
-        <button
-          onClick={handlePlay}
-          disabled={disabled || isLoading}
-          className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <Loader className="animate-spin" size={20} />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Play size={20} fill="currentColor" />
-              Drop Ball
-            </>
-          )}
-        </button>
       </div>
+
+      <div>
+        <label className="text-sm font-medium text-gray-400">Risk Level</label>
+        <div className="grid grid-cols-3 gap-2 mt-2">
+          {riskLevels.map((r) => (
+            <button key={r} onClick={() => onRiskLevelChange(r)} className={getButtonClass(riskLevel === r)}>
+              {r.charAt(0).toUpperCase() + r.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={handlePlayClick}
+        disabled={disabled || isLoading || parseFloat(betAmount) <= 0}
+        className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-lg rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isLoading ? 'Processing...' : 'Play'}
+      </button>
     </div>
   );
 };
