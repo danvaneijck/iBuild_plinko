@@ -12,7 +12,7 @@ import { Difficulty, RiskLevel } from './types/game';
 import { MULTIPLIERS } from './config/multipliers';
 
 function App() {
-  const { address, injectiveAddress, isConnecting, selectedWallet: selectedWallet, error: walletError, connect, disconnect, isConnected } = useWallet();
+  const { address, injectiveAddress, isConnecting, error: walletError, connect, disconnect, isConnected } = useWallet();
   const {
     balls,
     gameHistory,
@@ -22,8 +22,10 @@ function App() {
     contractsValid,
     dropBall,
     purchasePlink,
-    refreshBalance
+    refreshBalance,
+    onAnimationComplete
   } = usePlinkoGame(address);
+
 
   // --- Add state for game settings ---
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
@@ -85,7 +87,7 @@ function App() {
                 address={address}
                 injectiveAddress={injectiveAddress}
                 isConnecting={isConnecting}
-                selectedWallet={selectedWallet}
+                isConnected={isConnected}
                 error={walletError}
                 onConnect={connect}
                 onDisconnect={disconnect}
@@ -141,7 +143,9 @@ function App() {
                 onDifficultyChange={setDifficulty}
                 onRiskLevelChange={setRiskLevel}
               />
-              {/* <GameHistory games={gameHistory} /> */}
+              {gameHistory &&
+                <GameHistory history={gameHistory} />
+              }
             </div>
 
             {/* Center Column - Plinko Board */}
@@ -150,6 +154,7 @@ function App() {
                 balls={balls}
                 difficulty={difficulty}
                 multipliers={multipliers}
+                onAnimationComplete={onAnimationComplete}
               />
             </div>
           </div>

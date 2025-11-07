@@ -1,7 +1,4 @@
-import {
-    MsgExecuteContractCompat,
-    getInjectiveAddress,
-} from "@injectivelabs/sdk-ts";
+import { MsgExecuteContractCompat } from "@injectivelabs/sdk-ts";
 import { BigNumberInBase } from "@injectivelabs/utils";
 import { WalletStrategy } from "@injectivelabs/wallet-strategy";
 import { Network, getNetworkEndpoints } from "@injectivelabs/networks";
@@ -35,7 +32,7 @@ export class ContractService {
      */
     async getPlinkBalance(address: string): Promise<string> {
         try {
-            const injectiveAddress = getInjectiveAddress(address);
+            const injectiveAddress = address;
             const queryMsg = { balance: { address: injectiveAddress } };
 
             const response = await fetch(
@@ -45,6 +42,7 @@ export class ContractService {
             );
 
             const data = await response.json();
+
             const balance = data?.data?.balance || "0";
 
             // Convert from base units (18 decimals) to display units
@@ -62,7 +60,6 @@ export class ContractService {
      */
     async purchasePlink(injAmount: string, userAddress: string): Promise<any> {
         try {
-            console.log(this.walletStrategy);
             this.msgBroadcaster = new MsgBroadcaster({
                 walletStrategy: this.walletStrategy,
                 network,
@@ -71,10 +68,7 @@ export class ContractService {
                 gasBufferCoefficient: 1.2,
             });
 
-            console.log(network, endpoints);
-
             const injectiveAddress = userAddress;
-            console.log(injectiveAddress);
 
             // Convert INJ amount to base units (18 decimals)
             const amount = new BigNumberInBase(injAmount)
@@ -90,8 +84,6 @@ export class ContractService {
                     amount,
                 },
             });
-
-            console.log("Purchase PLINK msg:", msg);
 
             const result = await this.msgBroadcaster.broadcastV2({
                 msgs: msg,
@@ -155,7 +147,15 @@ export class ContractService {
         userAddress: string
     ): Promise<any> {
         try {
-            const injectiveAddress = getInjectiveAddress(userAddress);
+            const injectiveAddress = userAddress;
+
+            this.msgBroadcaster = new MsgBroadcaster({
+                walletStrategy: this.walletStrategy,
+                network,
+                endpoints,
+                simulateTx: true,
+                gasBufferCoefficient: 1.2,
+            });
 
             // Convert amount to base units
             const baseAmount = new BigNumberInBase(amount)
@@ -190,7 +190,7 @@ export class ContractService {
      */
     async getPlinkAllowance(userAddress: string): Promise<string> {
         try {
-            const injectiveAddress = getInjectiveAddress(userAddress);
+            const injectiveAddress = userAddress;
             const queryMsg = {
                 allowance: {
                     owner: injectiveAddress,
@@ -226,7 +226,15 @@ export class ContractService {
         userAddress: string
     ): Promise<any> {
         try {
-            const injectiveAddress = getInjectiveAddress(userAddress);
+            const injectiveAddress = userAddress;
+
+            this.msgBroadcaster = new MsgBroadcaster({
+                walletStrategy: this.walletStrategy,
+                network,
+                endpoints,
+                simulateTx: true,
+                gasBufferCoefficient: 1.2,
+            });
 
             // Convert bet amount to base units
             const baseAmount = new BigNumberInBase(betAmount)
@@ -293,7 +301,7 @@ export class ContractService {
         limit: number = 20
     ): Promise<any> {
         try {
-            const injectiveAddress = getInjectiveAddress(userAddress);
+            const injectiveAddress = userAddress;
             const queryMsg = {
                 history: {
                     player: injectiveAddress,

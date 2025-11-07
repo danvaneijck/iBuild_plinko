@@ -1,11 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { ChainId, EvmChainId } from "@injectivelabs/ts-types";
 import { Wallet } from "@injectivelabs/wallet-base";
-import { WalletStrategy } from "@injectivelabs/wallet-strategy";
 import { getInjectiveAddress } from "@injectivelabs/sdk-ts";
 import { walletStrategy } from "./useContracts";
-
-const alchemyRpcEndpoint = "https://sentry.evm-rpc.injective.network/";
 
 export const useWallet = () => {
     const [address, setAddress] = useState<string>("");
@@ -32,7 +28,7 @@ export const useWallet = () => {
 
         try {
             // Set the wallet first
-            await walletStrategy.setWallet(wallet);
+            walletStrategy.setWallet(wallet);
             console.log("Wallet set successfully");
 
             // Get addresses
@@ -85,6 +81,7 @@ export const useWallet = () => {
             console.log("Auto-reconnecting to saved wallet");
             setAddress(savedAddress);
             setSelectedWallet(savedWallet);
+            walletStrategy.setWallet(savedWallet);
         }
     }, []);
 

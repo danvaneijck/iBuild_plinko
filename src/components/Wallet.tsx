@@ -4,10 +4,9 @@ import React, { useState } from 'react';
 import { Wallet as WalletIcon, X, AlertCircle } from 'lucide-react';
 import { Wallet as InjectiveWallet } from '@injectivelabs/wallet-base';
 
-// Define the props the component will accept from its parent (App.tsx)
 interface WalletProps {
     address?: string;
-    injectiveAddress?: string; // Prop passed from App, can be used if needed
+    injectiveAddress?: string;
     isConnecting: boolean;
     isConnected: boolean;
     error: string | null;
@@ -34,8 +33,6 @@ export const Wallet: React.FC<WalletProps> = ({
 
     const handleConnect = async (wallet: InjectiveWallet) => {
         await onConnect(wallet);
-        // The modal will now close regardless of success,
-        // allowing the parent to display any error messages.
         setShowModal(false);
     };
 
@@ -72,8 +69,8 @@ export const Wallet: React.FC<WalletProps> = ({
             )}
 
             {showModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full border border-gray-800 shadow-2xl animate-fade-in-up">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex min-h-screen items-center justify-center z-50 p-4">
+                    <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full border border-gray-800 shadow-2xl animate-fade-in-scale">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white">Connect Wallet</h2>
                             <button
@@ -84,7 +81,6 @@ export const Wallet: React.FC<WalletProps> = ({
                             </button>
                         </div>
 
-                        {/* Note: Errors are now displayed in the main App component, but can be shown here too if desired */}
                         {error && (
                             <div className="mb-4 p-4 bg-red-900/50 border border-red-700 rounded-lg flex items-start gap-3">
                                 <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />

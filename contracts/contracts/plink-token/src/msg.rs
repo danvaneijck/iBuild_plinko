@@ -37,6 +37,7 @@ pub enum ExecuteMsg {
         recipient: String,
         amount: Uint128,
     },
+    UpdateMinter { new_minter: String },
 }
 
 #[cw_serde]

@@ -1,6 +1,8 @@
 import React from 'react';
 import { History, TrendingUp, TrendingDown } from 'lucide-react';
 import { GameResult } from '../types/game';
+import { formatTokenAmount } from '../utils/format';
+import { PLINK_TOKEN_DECIMALS } from '../config/contracts';
 
 interface GameHistoryProps {
   history: GameResult[];
@@ -20,13 +22,26 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
             No games played yet. Start playing to see your history!
           </div>
         ) : (
-          history.map((result) => {
-            const isWin = parseFloat(result.winAmount) > parseFloat(result.betAmount);
-            const profit = parseFloat(result.winAmount) - parseFloat(result.betAmount);
+          history.sort((a, b) => b.timestamp - a.timestamp).map((result) => {
+
+            // ---- Step 2: Use BigInt for precise calculations ----
+            const betAmountBigInt = BigInt(result.bet_amount || '0');
+            const winAmountBigInt = BigInt(result.win_amount || '0');
+            const profitBigInt = winAmountBigInt - betAmountBigInt;
+            const isWin = winAmountBigInt > betAmountBigInt;
+
+            // ---- Step 3: Format the amounts for display ----
+            const betFormatted = formatTokenAmount(result.bet_amount, PLINK_TOKEN_DECIMALS);
+            const wonFormatted = formatTokenAmount(result.win_amount, PLINK_TOKEN_DECIMALS);
+            // We format the profit separately. Need to handle its sign.
+            const profitFormatted = formatTokenAmount(
+              profitBigInt.toString().replace('-', ''), // Format the absolute value
+              PLINK_TOKEN_DECIMALS
+            );
 
             return (
               <div
-                key={result.ballId}
+                key={result.timestamp}
                 className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-colors"
               >
                 <div className="flex items-center justify-between mb-2">
@@ -37,19 +52,19 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
                       <TrendingDown className="text-red-500" size={20} />
                     )}
                     <span className="text-white font-semibold">
-                      {result.multiplier}x Multiplier
+                      {result.multiplier} Multiplier
                     </span>
                   </div>
                   <span className={`font-bold ${isWin ? 'text-green-500' : 'text-red-500'}`}>
-                    {profit >= 0 ? '+' : ''}{profit.toFixed(2)} $PLINK
+                    {profitBigInt >= 0n ? '+' : '-'}{profitFormatted} $PLINK
                   </span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-400">
-                  <span>Bet: {result.betAmount} $PLINK</span>
-                  <span>Won: {result.winAmount} $PLINK</span>
+                  <span>Bet: {betFormatted} $PLINK</span>
+                  <span>Won: {wonFormatted} $PLINK</span>
                 </div>
                 <div className="text-xs text-gray-600 mt-2">
-                  {new Date(result.timestamp).toLocaleString()}
+                  {new Date(result.timestamp * 1000).toLocaleString()}
                 </div>
               </div>
             );

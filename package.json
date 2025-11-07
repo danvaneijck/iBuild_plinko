@@ -29,6 +29,7 @@
     "@injectivelabs/wallet-turnkey": "1.16.22",
     "@injectivelabs/wallet-wallet-connect": "1.16.22",
     "lucide-react": "^0.344.0",
+    "matter-js": "^0.20.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
