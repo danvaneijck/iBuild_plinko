@@ -387,10 +387,18 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
         let stats: StatsResponse = from_json(&res).unwrap();
 
+        // Debug: Print actual values
+        println!("Total wagered: {}", stats.total_wagered);
+        println!("Total won: {}", stats.total_won);
+        println!("House balance: {}", stats.house_balance);
+
         // House balance should be total wagered minus total won
         // Note: Due to the new logic, house_balance = sum(bets) - sum(wins)
         // This should equal total_wagered - total_won
-        let expected_house_balance = stats.total_wagered.checked_sub(stats.total_won).unwrap_or(Uint128::zero());
+        let expected_house_balance = stats.total_wagered.saturating_sub(stats.total_won);
+        
+        println!("Expected house balance: {}", expected_house_balance);
+        
         assert_eq!(stats.house_balance, expected_house_balance);
     }
 
