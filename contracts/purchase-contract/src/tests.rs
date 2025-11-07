@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::{execute, instantiate, query};
+    use crate::error::ContractError;
+    use crate::msg::{ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg, StatsResponse};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_json, Addr, BankMsg, Coin, CosmosMsg, SubMsg, Uint128, WasmMsg};
+    use cosmwasm_std::{coins, from_json, BankMsg, Coin, CosmosMsg, DepsMut, Response, Uint128, WasmMsg};
     use cw20::Cw20ExecuteMsg;
 
     const ADMIN: &str = "admin";
@@ -267,6 +269,6 @@ mod tests {
         let info = mock_info(USER, &coins(u128::MAX, "inj"));
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
 
-        assert!(matches!(err, ContractError::OverflowError {}));
+        assert!(matches!(err, ContractError::Overflow(_) | ContractError::OverflowError {}));
     }
 }

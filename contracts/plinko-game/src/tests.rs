@@ -1,8 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::{execute, instantiate, query};
+    use crate::error::ContractError;
+    use crate::msg::{
+        ConfigResponse, Difficulty, ExecuteMsg, HistoryResponse, InstantiateMsg, QueryMsg,
+        RiskLevel, StatsResponse,
+    };
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{from_json, Addr, CosmosMsg, Uint128, WasmMsg};
+    use cosmwasm_std::{from_json, CosmosMsg, DepsMut, Response, Uint128, WasmMsg};
     use cw20::Cw20ExecuteMsg;
 
     const ADMIN: &str = "admin";
@@ -399,7 +404,7 @@ mod tests {
             bet_amount: Uint128::new(100_000000000000000000),
         };
 
-        let res1 = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+        let _res1 = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
 
         // Get the path from first game
         let query_msg = QueryMsg::History {
@@ -411,7 +416,7 @@ mod tests {
         let path1 = history.games[0].path.clone();
 
         // Different nonce (second game) should produce different result
-        let res2 = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let _res2 = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         let query_msg = QueryMsg::History {
             player: PLAYER.to_string(),

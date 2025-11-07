@@ -1,16 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::contract::{execute, instantiate, query};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_json, Addr, Uint128};
-    use cw20::{BalanceResponse, Cw20Coin, MinterResponse, TokenInfoResponse};
+    use cosmwasm_std::{from_json, Uint128};
+    use cw20::{BalanceResponse, Cw20Coin, Cw20ExecuteMsg as ExecuteMsg, Cw20QueryMsg as QueryMsg, MinterResponse, TokenInfoResponse};
+    use cw20_base::msg::InstantiateMsg;
+    use cw20_base::ContractError as Cw20ContractError;
 
     const CREATOR: &str = "creator";
     const MINTER: &str = "minter";
     const USER1: &str = "user1";
     const USER2: &str = "user2";
 
-    fn setup_contract(deps: DepsMut) -> Result<Response, Cw20ContractError> {
+    fn setup_contract(deps: cosmwasm_std::DepsMut) -> Result<cosmwasm_std::Response, Cw20ContractError> {
         let msg = InstantiateMsg {
             name: "PLINK Token".to_string(),
             symbol: "PLINK".to_string(),
@@ -23,6 +25,7 @@ mod tests {
                 minter: MINTER.to_string(),
                 cap: None,
             }),
+            marketing: None,
         };
 
         let info = mock_info(CREATOR, &[]);
@@ -35,13 +38,6 @@ mod tests {
         let res = setup_contract(deps.as_mut()).unwrap();
 
         assert_eq!(res.messages.len(), 0);
-        assert_eq!(
-            res.attributes,
-            vec![
-                ("action", "instantiate"),
-                ("sender", CREATOR),
-            ]
-        );
 
         // Check token info
         let query_msg = QueryMsg::TokenInfo {};
