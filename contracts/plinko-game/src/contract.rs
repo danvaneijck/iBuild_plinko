@@ -112,21 +112,12 @@ fn execute_play(
         .map_err(|_| ContractError::OverflowError {})?;
 
     // Update house balance
-    // House receives the bet amount and pays out the win amount
-    // Net change = bet_amount - win_amount
-    // If win_amount > bet_amount, house loses money (balance decreases)
-    // If bet_amount > win_amount, house gains money (balance increases)
-    
+    // House receives the bet amount
     stats.house_balance = stats.house_balance.checked_add(bet_amount)?;
     
-    // Only subtract win_amount if house has enough balance
-    if win_amount > stats.house_balance {
-        // This shouldn't happen in production as house should be funded
-        // But for tests, we'll allow it and set balance to 0
-        stats.house_balance = Uint128::zero();
-    } else {
-        stats.house_balance = stats.house_balance.checked_sub(win_amount)?;
-    }
+    // House pays out the win amount
+    // Use saturating_sub to prevent underflow - house balance can't go negative
+    stats.house_balance = stats.house_balance.saturating_sub(win_amount);
 
     STATS.save(deps.storage, &stats)?;
 
