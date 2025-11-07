@@ -1,0 +1,52 @@
+{
+  "name": "plinko-blockchain-game",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@injectivelabs/exceptions": "1.16.22",
+    "@injectivelabs/networks": "1.16.22",
+    "@injectivelabs/sdk-ts": "1.16.22",
+    "@injectivelabs/ts-types": "1.16.22",
+    "@injectivelabs/utils": "1.16.22",
+    "@injectivelabs/wallet-base": "1.16.22",
+    "@injectivelabs/wallet-core": "1.16.22",
+    "@injectivelabs/wallet-cosmos": "1.16.22",
+    "@injectivelabs/wallet-cosmos-strategy": "1.16.22",
+    "@injectivelabs/wallet-cosmostation": "1.16.22",
+    "@injectivelabs/wallet-evm": "1.16.22",
+    "@injectivelabs/wallet-ledger": "1.16.22",
+    "@injectivelabs/wallet-magic": "1.16.22",
+    "@injectivelabs/wallet-private-key": "1.16.22",
+    "@injectivelabs/wallet-strategy": "1.16.22",
+    "@injectivelabs/wallet-trezor": "1.16.22",
+    "@injectivelabs/wallet-turnkey": "1.16.22",
+    "@injectivelabs/wallet-wallet-connect": "1.16.22",
+    "lucide-react": "^0.344.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@bangjelkoski/vite-plugin-node-polyfills": "^0.0.2",
+    "@eslint/js": "^9.9.1",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.18",
+    "eslint": "^9.9.1",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.11",
+    "globals": "^15.9.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.3.0",
+    "vite": "^5.4.2"
+  }
+}

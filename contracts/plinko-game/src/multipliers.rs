@@ -1,0 +1,58 @@
+use crate::msg::{Difficulty, RiskLevel};
+
+pub fn get_multipliers(difficulty: &Difficulty, risk_level: &RiskLevel) -> Vec<(u32, u32)> {
+    // Returns multipliers as (numerator, denominator) for precise calculation
+    // e.g., 5.6x = (56, 10), 0.5x = (5, 10)
+    match difficulty {
+        Difficulty::Easy => match risk_level {
+            RiskLevel::Low => vec![
+                (56, 10), (21, 10), (11, 10), (10, 10), (5, 10),
+                (10, 10), (11, 10), (21, 10), (56, 10),
+            ],
+            RiskLevel::Medium => vec![
+                (130, 10), (30, 10), (13, 10), (7, 10), (4, 10),
+                (7, 10), (13, 10), (30, 10), (130, 10),
+            ],
+            RiskLevel::High => vec![
+                (290, 10), (40, 10), (15, 10), (3, 10), (2, 10),
+                (3, 10), (15, 10), (40, 10), (290, 10),
+            ],
+        },
+        Difficulty::Medium => match risk_level {
+            RiskLevel::Low => vec![
+                (89, 10), (30, 10), (14, 10), (11, 10), (10, 10), (5, 10),
+                (10, 10), (11, 10), (14, 10), (30, 10), (89, 10),
+            ],
+            RiskLevel::Medium => vec![
+                (180, 10), (40, 10), (17, 10), (9, 10), (5, 10), (3, 10),
+                (5, 10), (9, 10), (17, 10), (40, 10), (180, 10),
+            ],
+            RiskLevel::High => vec![
+                (430, 10), (70, 10), (20, 10), (6, 10), (2, 10), (2, 10),
+                (2, 10), (6, 10), (20, 10), (70, 10), (430, 10),
+            ],
+        },
+        Difficulty::Hard => match risk_level {
+            RiskLevel::Low => vec![
+                (160, 10), (90, 10), (20, 10), (14, 10), (11, 10), (10, 10), (5, 10),
+                (10, 10), (11, 10), (14, 10), (20, 10), (90, 10), (160, 10),
+            ],
+            RiskLevel::Medium => vec![
+                (1100, 10), (410, 10), (100, 10), (50, 10), (30, 10), (15, 10), (10, 10), (5, 10),
+                (10, 10), (15, 10), (30, 10), (50, 10), (100, 10), (410, 10), (1100, 10),
+            ],
+            RiskLevel::High => vec![
+                (10000, 10), (1300, 10), (260, 10), (90, 10), (40, 10), (20, 10), (2, 10), (2, 10),
+                (2, 10), (20, 10), (40, 10), (90, 10), (260, 10), (1300, 10), (10000, 10),
+            ],
+        },
+    }
+}
+
+pub fn get_rows(difficulty: &Difficulty) -> u8 {
+    match difficulty {
+        Difficulty::Easy => 8,
+        Difficulty::Medium => 12,
+        Difficulty::Hard => 16,
+    }
+}
