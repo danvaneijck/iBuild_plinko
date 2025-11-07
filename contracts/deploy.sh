@@ -1,159 +1,181 @@
 #!/bin/bash
+set -euo pipefail
 
-# Plinko Game Deployment Script for Injective Testnet
-# This script deploys all three contracts and configures them
-
-set -e
-
-# Configuration
-CHAIN_ID="injective-888"
 NODE="https://testnet.sentry.tm.injective.network:443"
-KEY_NAME="your-key-name"  # Change this to your key name
-TREASURY_ADDRESS="inj1..."  # Change this to your treasury address
-EXCHANGE_RATE="100"  # 1 INJ = 100 PLINK
+CHAIN_ID="injective-888"
+FEES="2000000000000000inj"
+GAS="4000000"
+KEY_NAME="testnet"
+PASSWORD="12345678" 
+
+TREASURY_ADDRESS="inj1q2m26a7jdzjyfdn545vqsude3zwwtfrdap5jgz"
+DEPLOYER=$TREASURY_ADDRESS
+
+store_contract() {
+    local wasm_file="$1"
+    echo "📦 Storing contract: $wasm_file..." >&2
+    
+    tx_output=$(yes "$PASSWORD" | injectived tx wasm store "$wasm_file" \
+      --from="$KEY_NAME" \
+      --chain-id="$CHAIN_ID" \
+      --yes --fees="$FEES" --gas="$GAS" \
+      --node="$NODE" 2>&1)
+    
+    # **IMPROVED ERROR HANDLING**
+    if echo "$tx_output" | grep -q 'error:'; then
+        echo "❌ ERROR storing contract: $tx_output" >&2
+        exit 1
+    fi
+      
+    # **CORRECTED REGEX**
+    txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
+    echo "  - Transaction hash: $txhash" >&2
+    
+    sleep 6
+    
+    query_output=$(injectived query tx "$txhash" --node="$NODE")
+    code_id=$(echo "$query_output" | grep -A 1 'key: code_id' | grep 'value:' | head -1 | sed 's/.*value: "\(.*\)".*/\1/')
+    
+    if [ -z "$code_id" ]; then
+        echo "❌ ERROR: Failed to retrieve code_id for txhash: $txhash." >&2
+        exit 1
+    fi
+    echo "$code_id"
+}
+
+instantiate_contract() {
+    local code_id="$1"
+    local init_msg="$2"
+    local label="$3"
+    local admin="${4:-}"
+    if [ -z "$admin" ]; then
+        tx_output=$(yes $PASSWORD | injectived tx wasm instantiate "$code_id" "$init_msg" \
+          --label="$label" \
+          --no-admin \
+          --from="$KEY_NAME" \
+          --chain-id="$CHAIN_ID" \
+          --yes --fees="$FEES" --gas="$GAS" \
+          --node="$NODE" 2>&1)
+    else
+        tx_output=$(yes $PASSWORD | injectived tx wasm instantiate "$code_id" "$init_msg" \
+          --label="$label" \
+          --admin="$admin" \
+          --from="$KEY_NAME" \
+          --chain-id="$CHAIN_ID" \
+          --yes --fees="$FEES" --gas="$GAS" \
+          --node="$NODE" 2>&1)
+    fi
+    # Extract the txhash from the tx output.
+    txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
+    sleep 1
+    query_output=$(injectived query tx "$txhash" --node="$NODE")
+    # Extract the contract address from the query output.
+    contract_address=$(echo "$query_output" \
+    | grep -A 1 'key: contract_address' \
+    | grep 'value:' \
+    | head -1 \
+    | sed "s/.*value: //; s/['\"]//g")
+    echo "$contract_address"
+}
+
+execute_contract() {
+    local contract_address="$1"
+    local exec_msg="$2"
+    echo "🔧 Executing message on contract: $contract_address..." >&2
+
+    tx_output=$(yes "$PASSWORD" | injectived tx wasm execute "$contract_address" "$exec_msg" \
+    --from="$KEY_NAME" \
+    --chain-id="$CHAIN_ID" \
+    --yes --fees="$FEES" --gas="$GAS" \
+    --node="$NODE" 2>&1) || true
+    
+    txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
+
+    if echo "$tx_output" | grep -q 'error:'; then
+        echo "❌ ERROR executing contract: $tx_output" >&2
+        exit 1
+    fi
+    
+    # **CORRECTED REGEX**
+    txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
+    echo "  - Transaction hash: $txhash" >&2
+    sleep 6
+}
+
+
+# --- Main Deployment Logic ---
+# (This part remains the same)
 
 echo "🚀 Starting Plinko Game Deployment"
 echo "=================================="
-echo "Chain ID: $CHAIN_ID"
-echo "Node: $NODE"
-echo "Key: $KEY_NAME"
-echo "Treasury: $TREASURY_ADDRESS"
+echo "Chain ID:         $CHAIN_ID"
+echo "Node:             $NODE"
+echo "Deployer Key:     $KEY_NAME"
+echo "Deployer Address: $DEPLOYER"
+echo "Treasury Address: $TREASURY_ADDRESS"
 echo ""
 
-# Get deployer address
-DEPLOYER=$(injectived keys show $KEY_NAME -a)
-echo "Deployer: $DEPLOYER"
-echo ""
-
-# 1. Deploy PLINK Token
-echo "📦 Deploying PLINK Token Contract..."
-PLINK_TX=$(injectived tx wasm store contracts/plink-token/target/wasm32-unknown-unknown/release/plink_token.wasm \
-  --from $KEY_NAME \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes \
-  --output json)
-
-PLINK_CODE_ID=$(echo $PLINK_TX | jq -r '.logs[0].events[] | select(.type=="store_code") | .attributes[] | select(.key=="code_id") | .value')
+PLINK_CODE_ID=$(store_contract "artifacts/plink_token.wasm")
 echo "✅ PLINK Token Code ID: $PLINK_CODE_ID"
+echo ""
 
-# 2. Instantiate PLINK Token
-echo "🎯 Instantiating PLINK Token..."
-PLINK_INIT_TX=$(injectived tx wasm instantiate $PLINK_CODE_ID \
-  "{\"name\":\"Plink Token\",\"symbol\":\"PLINK\",\"decimals\":18,\"initial_balances\":[],\"mint\":{\"minter\":\"$DEPLOYER\",\"cap\":null}}" \
-  --label "plink-token" \
-  --from $KEY_NAME \
-  --admin $DEPLOYER \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes \
-  --output json)
-
-PLINK_TOKEN_ADDRESS=$(echo $PLINK_INIT_TX | jq -r '.logs[0].events[] | select(.type=="instantiate") | .attributes[] | select(.key=="_contract_address") | .value')
+INIT_PLINK=$(cat <<EOF
+{
+  "name": "Plink Token",
+  "symbol": "PLINK",
+  "decimals": 18,
+  "initial_balances": [],
+  "mint": {
+    "minter": "$DEPLOYER",
+    "cap": null
+  }
+}
+EOF
+)
+PLINK_TOKEN_ADDRESS=$(instantiate_contract "$PLINK_CODE_ID" "$INIT_PLINK" "plink-token" "$DEPLOYER")
 echo "✅ PLINK Token Address: $PLINK_TOKEN_ADDRESS"
 echo ""
 
-# 3. Deploy Purchase Contract
-echo "📦 Deploying Purchase Contract..."
-PURCHASE_TX=$(injectived tx wasm store contracts/purchase-contract/target/wasm32-unknown-unknown/release/purchase_contract.wasm \
-  --from $KEY_NAME \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes \
-  --output json)
-
-PURCHASE_CODE_ID=$(echo $PURCHASE_TX | jq -r '.logs[0].events[] | select(.type=="store_code") | .attributes[] | select(.key=="code_id") | .value')
+PURCHASE_CODE_ID=$(store_contract "artifacts/purchase_contract.wasm")
 echo "✅ Purchase Contract Code ID: $PURCHASE_CODE_ID"
+echo ""
 
-# 4. Instantiate Purchase Contract
-echo "🎯 Instantiating Purchase Contract..."
-PURCHASE_INIT_TX=$(injectived tx wasm instantiate $PURCHASE_CODE_ID \
-  "{\"plink_token_address\":\"$PLINK_TOKEN_ADDRESS\",\"treasury_address\":\"$TREASURY_ADDRESS\",\"exchange_rate\":\"$EXCHANGE_RATE\"}" \
-  --label "purchase-contract" \
-  --from $KEY_NAME \
-  --admin $DEPLOYER \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes \
-  --output json)
-
-PURCHASE_CONTRACT_ADDRESS=$(echo $PURCHASE_INIT_TX | jq -r '.logs[0].events[] | select(.type=="instantiate") | .attributes[] | select(.key=="_contract_address") | .value')
+INIT_PURCHASE=$(cat <<EOF
+{
+  "plink_token_address": "$PLINK_TOKEN_ADDRESS",
+  "treasury_address": "$TREASURY_ADDRESS",
+  "exchange_rate": "100"
+}
+EOF
+)
+PURCHASE_CONTRACT_ADDRESS=$(instantiate_contract "$PURCHASE_CODE_ID" "$INIT_PURCHASE" "purchase-contract" "$DEPLOYER")
 echo "✅ Purchase Contract Address: $PURCHASE_CONTRACT_ADDRESS"
 echo ""
 
-# 5. Update PLINK minter to Purchase Contract
-echo "🔧 Setting Purchase Contract as PLINK minter..."
-injectived tx wasm execute $PLINK_TOKEN_ADDRESS \
-  "{\"update_minter\":{\"new_minter\":\"$PURCHASE_CONTRACT_ADDRESS\"}}" \
-  --from $KEY_NAME \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes
-echo "✅ Minter updated"
+UPDATE_MINTER_MSG="{\"update_minter\":{\"new_minter\":\"$PURCHASE_CONTRACT_ADDRESS\"}}"
+execute_contract "$PLINK_TOKEN_ADDRESS" "$UPDATE_MINTER_MSG"
+echo "✅ PLINK Token minter updated to Purchase Contract"
 echo ""
 
-# 6. Deploy Plinko Game Contract
-echo "📦 Deploying Plinko Game Contract..."
-GAME_TX=$(injectived tx wasm store contracts/plinko-game/target/wasm32-unknown-unknown/release/plinko_game.wasm \
-  --from $KEY_NAME \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes \
-  --output json)
-
-GAME_CODE_ID=$(echo $GAME_TX | jq -r '.logs[0].events[] | select(.type=="store_code") | .attributes[] | select(.key=="code_id") | .value')
+GAME_CODE_ID=$(store_contract "artifacts/plinko_game.wasm")
 echo "✅ Plinko Game Code ID: $GAME_CODE_ID"
+echo ""
 
-# 7. Instantiate Plinko Game
-echo "🎯 Instantiating Plinko Game..."
-GAME_INIT_TX=$(injectived tx wasm instantiate $GAME_CODE_ID \
-  "{\"plink_token_address\":\"$PLINK_TOKEN_ADDRESS\",\"house_address\":\"$DEPLOYER\"}" \
-  --label "plinko-game" \
-  --from $KEY_NAME \
-  --admin $DEPLOYER \
-  --gas auto \
-  --gas-adjustment 1.3 \
-  --node $NODE \
-  --chain-id $CHAIN_ID \
-  --yes \
-  --output json)
-
-GAME_CONTRACT_ADDRESS=$(echo $GAME_INIT_TX | jq -r '.logs[0].events[] | select(.type=="instantiate") | .attributes[] | select(.key=="_contract_address") | .value')
+INIT_GAME=$(cat <<EOF
+{
+  "plink_token_address": "$PLINK_TOKEN_ADDRESS",
+  "house_address": "$DEPLOYER"
+}
+EOF
+)
+GAME_CONTRACT_ADDRESS=$(instantiate_contract "$GAME_CODE_ID" "$INIT_GAME" "plinko-game" "$DEPLOYER")
 echo "✅ Plinko Game Address: $GAME_CONTRACT_ADDRESS"
 echo ""
-
-# 8. Generate .env file
-echo "📝 Generating .env file..."
-cat > .env.deployed << EOF
-# Plinko Game Contract Addresses - Injective Testnet
-VITE_PLINK_TOKEN_ADDRESS=$PLINK_TOKEN_ADDRESS
-VITE_PURCHASE_CONTRACT_ADDRESS=$PURCHASE_CONTRACT_ADDRESS
-VITE_GAME_CONTRACT_ADDRESS=$GAME_CONTRACT_ADDRESS
-VITE_TREASURY_ADDRESS=$TREASURY_ADDRESS
-VITE_CHAIN_ID=$CHAIN_ID
-VITE_RPC_URL=$NODE
-VITE_EXCHANGE_RATE=$EXCHANGE_RATE
-EOF
 
 echo "✅ Deployment complete!"
 echo ""
 echo "📋 Summary:"
 echo "==========="
-echo "PLINK Token: $PLINK_TOKEN_ADDRESS"
+echo "PLINK Token:       $PLINK_TOKEN_ADDRESS"
 echo "Purchase Contract: $PURCHASE_CONTRACT_ADDRESS"
-echo "Plinko Game: $GAME_CONTRACT_ADDRESS"
-echo ""
-echo "Environment variables saved to .env.deployed"
-echo "Copy these to your frontend .env file"
+echo "Plinko Game:       $GAME_CONTRACT_ADDRESS"
