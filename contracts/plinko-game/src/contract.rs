@@ -116,8 +116,8 @@ fn execute_play(
     stats.house_balance = stats.house_balance.checked_add(bet_amount)?;
     
     // House pays out the win amount
-    // Use saturating_sub to prevent underflow - house balance can't go negative
-    stats.house_balance = stats.house_balance.saturating_sub(win_amount);
+    // Use checked_sub to ensure we don't underflow - if this fails, house is insolvent
+    stats.house_balance = stats.house_balance.checked_sub(win_amount)?;
 
     STATS.save(deps.storage, &stats)?;
 
