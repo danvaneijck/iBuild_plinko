@@ -125,6 +125,9 @@ fn execute_play(
     // Update player game count
     PLAYER_GAME_COUNT.save(deps.storage, &info.sender, &(player_count + 1))?;
 
+    // Convert Vec<u8> path to Vec<bool> for storage
+    let path_bool: Vec<bool> = path.iter().map(|&b| b != 0).collect();
+
     // Save game record
     let game_record = GameRecord {
         player: info.sender.clone(),
@@ -134,7 +137,7 @@ fn execute_play(
         multiplier: format!("{}.{}x", numerator / denominator, (numerator % denominator) * 10 / denominator),
         win_amount,
         timestamp: env.block.time.seconds(),
-        path: path.clone(),
+        path: path_bool,
     };
 
     GAME_HISTORY.save(deps.storage, (&info.sender, player_count), &game_record)?;

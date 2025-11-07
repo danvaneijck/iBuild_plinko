@@ -39,7 +39,6 @@ pub enum QueryMsg {
 }
 
 #[cw_serde]
-#[derive(Clone)]
 pub enum Difficulty {
     Easy,   // 8 rows
     Medium, // 12 rows
@@ -47,7 +46,6 @@ pub enum Difficulty {
 }
 
 #[cw_serde]
-#[derive(Clone)]
 pub enum RiskLevel {
     Low,
     Medium,
