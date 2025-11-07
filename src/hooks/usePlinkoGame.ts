@@ -17,6 +17,20 @@ export const usePlinkoGame = (userAddress: string) => {
         refreshHistory,
     } = useContracts(userAddress);
 
+    const handleAnimationComplete = useCallback(
+        (ballId: string) => {
+            console.log(`Animation for ${ballId} complete. Refreshing data.`);
+
+            // Refresh the user's balance and game history.
+            refreshBalance();
+            refreshHistory();
+
+            // Remove the completed ball from the state.
+            setBalls((prev) => prev.filter((b) => b.id !== ballId));
+        },
+        [refreshBalance, refreshHistory]
+    ); // Dependencies
+
     const dropBall = useCallback(
         async (
             difficulty: Difficulty,
@@ -38,20 +52,14 @@ export const usePlinkoGame = (userAddress: string) => {
                     const newBall: Ball = {
                         id: `ball-${Date.now()}`,
                         path: gameResult.path,
+                        x: 400, // Assuming canvas width is 800
+                        y: 40, // Start above the pegs
+                        vx: 0,
+                        vy: 0,
+                        currentRow: -1,
+                        pegIndex: 1,
                     };
                     setBalls((prev) => [...prev, newBall]);
-
-                    setTimeout(() => {
-                        console.log(
-                            "Animation finished. Updating balance and history."
-                        );
-                        refreshBalance();
-                        refreshHistory();
-
-                        setBalls((prev) =>
-                            prev.filter((b) => b.id !== newBall.id)
-                        );
-                    }, ANIMATION_DURATION_MS);
                 }
                 return gameResult;
             } catch (err: any) {
@@ -59,7 +67,7 @@ export const usePlinkoGame = (userAddress: string) => {
                 throw err;
             }
         },
-        [playGame, contractsValid, refreshBalance, refreshHistory]
+        [playGame, contractsValid]
     );
 
     const handlePurchasePlink = useCallback(
@@ -85,5 +93,6 @@ export const usePlinkoGame = (userAddress: string) => {
         dropBall,
         purchasePlink: handlePurchasePlink,
         refreshBalance,
+        onAnimationComplete: handleAnimationComplete,
     };
 };

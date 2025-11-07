@@ -42,7 +42,6 @@ export class ContractService {
             );
 
             const data = await response.json();
-            console.log(data);
 
             const balance = data?.data?.balance || "0";
 
@@ -61,7 +60,6 @@ export class ContractService {
      */
     async purchasePlink(injAmount: string, userAddress: string): Promise<any> {
         try {
-            console.log(this.walletStrategy);
             this.msgBroadcaster = new MsgBroadcaster({
                 walletStrategy: this.walletStrategy,
                 network,
@@ -70,10 +68,7 @@ export class ContractService {
                 gasBufferCoefficient: 1.2,
             });
 
-            console.log(network, endpoints);
-
             const injectiveAddress = userAddress;
-            console.log(injectiveAddress);
 
             // Convert INJ amount to base units (18 decimals)
             const amount = new BigNumberInBase(injAmount)
@@ -89,8 +84,6 @@ export class ContractService {
                     amount,
                 },
             });
-
-            console.log("Purchase PLINK msg:", msg);
 
             const result = await this.msgBroadcaster.broadcastV2({
                 msgs: msg,

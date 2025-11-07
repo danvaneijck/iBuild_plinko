@@ -37,13 +37,11 @@ export const useContracts = (userAddress: string) => {
     // Fetch PLINK balance
     const fetchPlinkBalance = useCallback(async () => {
         if (!userAddress || !contractsValid) return;
-        console.log("fetch balance");
 
         const contractService = new ContractService(walletStrategy);
 
         try {
             const balance = await contractService.getPlinkBalance(userAddress);
-            console.log(balance);
             setPlinkBalance(balance);
         } catch (err: any) {
             console.error("Error fetching balance:", err);
@@ -60,7 +58,6 @@ export const useContracts = (userAddress: string) => {
                 userAddress,
                 20
             );
-            console.log(history);
             setGameHistory(history);
         } catch (err: any) {
             console.error("Error fetching history:", err);
@@ -137,8 +134,6 @@ export const useContracts = (userAddress: string) => {
                     betAmount,
                     userAddress
                 );
-
-                console.log(result);
 
                 // Extract game result from transaction events
                 const gameResult = parseGameResult(result);
