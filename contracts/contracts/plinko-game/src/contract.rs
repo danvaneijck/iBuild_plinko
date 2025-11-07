@@ -137,7 +137,7 @@ fn execute_play(
         multiplier: format!("{}.{}x", numerator / denominator, (numerator % denominator) * 10 / denominator),
         win_amount,
         timestamp: env.block.time.seconds(),
-        path: path_bool,
+        path: path_bool.clone(),
     };
 
     GAME_HISTORY.save(deps.storage, (&info.sender, player_count), &game_record)?;
@@ -168,6 +168,8 @@ fn execute_play(
         }));
     }
 
+    let path_str: String = path_bool.iter().map(|&b| if b { '1' } else { '0' }).collect();
+
     Ok(Response::new()
         .add_messages(messages)
         .add_attribute("action", "play")
@@ -175,7 +177,10 @@ fn execute_play(
         .add_attribute("bet_amount", bet_amount)
         .add_attribute("win_amount", win_amount)
         .add_attribute("multiplier", format!("{}.{}", numerator / denominator, (numerator % denominator) * 10 / denominator))
-        .add_attribute("bucket", bucket_index.to_string()))
+        .add_attribute("bucket", bucket_index.to_string())
+        .add_attribute("path", path_str) 
+    )
+        
 }
 
 fn execute_update_house(
@@ -305,11 +310,7 @@ fn query_history(deps: Deps, player: String, limit: Option<u32>) -> StdResult<Hi
         .unwrap_or(0);
 
     let limit = limit.unwrap_or(10).min(100) as u64;
-    let start = if player_count > limit {
-        player_count - limit
-    } else {
-        0
-    };
+    let start = player_count.saturating_sub(limit);
 
     let mut games = Vec::new();
     for i in start..player_count {

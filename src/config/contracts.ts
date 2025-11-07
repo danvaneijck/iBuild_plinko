@@ -31,3 +31,5 @@ export const validateContracts = (): boolean => {
 
     return true;
 };
+
+export const PLINK_TOKEN_DECIMALS = 18;

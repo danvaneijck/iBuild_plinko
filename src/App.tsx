@@ -141,7 +141,9 @@ function App() {
                 onDifficultyChange={setDifficulty}
                 onRiskLevelChange={setRiskLevel}
               />
-              {/* <GameHistory games={gameHistory} /> */}
+              {gameHistory &&
+                <GameHistory history={gameHistory} />
+              }
             </div>
 
             {/* Center Column - Plinko Board */}

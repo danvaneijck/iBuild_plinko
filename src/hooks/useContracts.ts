@@ -1,12 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { WalletStrategy } from "@injectivelabs/wallet-strategy";
 import { ChainId, EvmChainId } from "@injectivelabs/ts-types";
-import { Network } from "@injectivelabs/networks";
 import { ContractService } from "../services/contractService";
-import { NETWORK, CHAIN_ID, validateContracts } from "../config/contracts";
+import { CHAIN_ID, validateContracts } from "../config/contracts";
 import { Difficulty, RiskLevel, GameResult } from "../types/game";
 
-const network = NETWORK === "mainnet" ? Network.Mainnet : Network.Testnet;
 const chainId = CHAIN_ID === "injective-1" ? ChainId.Mainnet : ChainId.Testnet;
 
 export const walletStrategy = new WalletStrategy({
@@ -39,11 +37,13 @@ export const useContracts = (userAddress: string) => {
     // Fetch PLINK balance
     const fetchPlinkBalance = useCallback(async () => {
         if (!userAddress || !contractsValid) return;
+        console.log("fetch balance");
 
         const contractService = new ContractService(walletStrategy);
 
         try {
             const balance = await contractService.getPlinkBalance(userAddress);
+            console.log(balance);
             setPlinkBalance(balance);
         } catch (err: any) {
             console.error("Error fetching balance:", err);
@@ -60,6 +60,7 @@ export const useContracts = (userAddress: string) => {
                 userAddress,
                 20
             );
+            console.log(history);
             setGameHistory(history);
         } catch (err: any) {
             console.error("Error fetching history:", err);
@@ -137,11 +138,11 @@ export const useContracts = (userAddress: string) => {
                     userAddress
                 );
 
-                // Extract game result from transaction events
-                const gameResult = this.parseGameResult(result);
+                console.log(result);
 
-                // Refresh balance and history
-                await Promise.all([fetchPlinkBalance(), fetchGameHistory()]);
+                // Extract game result from transaction events
+                const gameResult = parseGameResult(result);
+                console.log("Parsed game result:", gameResult);
 
                 return gameResult;
             } catch (err: any) {
@@ -152,14 +153,7 @@ export const useContracts = (userAddress: string) => {
                 setIsLoading(false);
             }
         },
-        [
-            userAddress,
-            plinkBalance,
-
-            fetchPlinkBalance,
-            fetchGameHistory,
-            contractsValid,
-        ]
+        [userAddress, plinkBalance, contractsValid]
     );
 
     // Parse game result from transaction
@@ -178,9 +172,16 @@ export const useContracts = (userAddress: string) => {
             const betAmount = getAttr("bet_amount");
             const winAmount = getAttr("win_amount");
             const multiplier = getAttr("multiplier");
-            const bucket = getAttr("bucket");
+            const pathString = getAttr("path");
 
-            if (!betAmount || !winAmount || !multiplier) return null;
+            if (!betAmount || !winAmount || !multiplier || !pathString) {
+                console.error(
+                    "Essential game attributes missing from transaction event"
+                );
+                return null;
+            }
+
+            const path = pathString.split("").map(Number);
 
             return {
                 ballId: `ball-${Date.now()}`,
@@ -188,6 +189,7 @@ export const useContracts = (userAddress: string) => {
                 multiplier: parseFloat(multiplier),
                 winAmount,
                 timestamp: Date.now(),
+                path: path,
             };
         } catch (err) {
             console.error("Error parsing game result:", err);

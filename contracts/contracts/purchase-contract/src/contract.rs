@@ -98,27 +98,25 @@ fn execute_purchase(
     stats.total_purchases += 1;
     STATS.save(deps.storage, &stats)?;
 
-    // Create messages
-    let mut messages: Vec<CosmosMsg> = vec![];
-
-    // 1. Send INJ to treasury
-    messages.push(CosmosMsg::Bank(BankMsg::Send {
-        to_address: config.treasury_address.to_string(),
-        amount: vec![Coin {
-            denom: "inj".to_string(),
-            amount: inj_amount,
-        }],
-    }));
-
-    // 2. Mint PLINK to buyer
-    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.plink_token_address.to_string(),
-        msg: to_json_binary(&Cw20ExecuteMsg::Mint {
-            recipient: info.sender.to_string(),
-            amount: plink_amount,
-        })?,
-        funds: vec![],
-    }));
+    let messages: Vec<CosmosMsg> = vec![
+        // 1. Send INJ to treasury
+        CosmosMsg::Bank(BankMsg::Send {
+            to_address: config.treasury_address.to_string(),
+            amount: vec![Coin {
+                denom: "inj".to_string(),
+                amount: inj_amount,
+            }],
+        }),
+        // 2. Mint PLINK to buyer
+        CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.plink_token_address.to_string(),
+            msg: to_json_binary(&Cw20ExecuteMsg::Mint {
+                recipient: info.sender.to_string(),
+                amount: plink_amount,
+            })?,
+            funds: vec![],
+        }),
+    ];
 
     Ok(Response::new()
         .add_messages(messages)

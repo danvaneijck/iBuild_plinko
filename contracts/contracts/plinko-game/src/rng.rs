@@ -23,7 +23,7 @@ pub fn generate_ball_path(
     // Generate path (0 = left, 1 = right)
     for _ in 0..rows {
         let mut hasher = Sha256::new();
-        hasher.update(&seed);
+        hasher.update(seed);
         seed = hasher.finalize();
         
         // Use first byte to determine direction

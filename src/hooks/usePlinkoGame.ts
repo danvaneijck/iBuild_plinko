@@ -1,104 +1,89 @@
-import { useState, useCallback } from 'react';
-import { Difficulty, RiskLevel, Ball, GameResult } from '../types/game';
-import { MULTIPLIERS, ROWS_CONFIG } from '../config/multipliers';
-import { useContracts } from './useContracts';
+import { useState, useCallback } from "react";
+import { Difficulty, RiskLevel, Ball } from "../types/game";
+import { useContracts } from "./useContracts";
+export const ANIMATION_DURATION_MS = 3000;
 
 export const usePlinkoGame = (userAddress: string) => {
-  const [balls, setBalls] = useState<Ball[]>([]);
-  const {
-    plinkBalance,
-    gameHistory,
-    isLoading,
-    error,
-    contractsValid,
-    purchasePlink,
-    playGame,
-    refreshBalance,
-  } = useContracts(userAddress);
+    const [balls, setBalls] = useState<Ball[]>([]);
+    const {
+        plinkBalance,
+        gameHistory,
+        isLoading,
+        error,
+        contractsValid,
+        purchasePlink,
+        playGame,
+        refreshBalance,
+        refreshHistory,
+    } = useContracts(userAddress);
 
-  const generateBallPath = useCallback((difficulty: Difficulty): number[] => {
-    const rows = ROWS_CONFIG[difficulty];
-    const path: number[] = [];
-    
-    for (let i = 0; i < rows; i++) {
-      path.push(Math.random() > 0.5 ? 1 : 0);
-    }
-    
-    return path;
-  }, []);
+    const dropBall = useCallback(
+        async (
+            difficulty: Difficulty,
+            riskLevel: RiskLevel,
+            betAmount: string
+        ) => {
+            if (!contractsValid) {
+                throw new Error("Contracts not configured.");
+            }
 
-  const calculateFinalPosition = useCallback((path: number[]): number => {
-    return path.reduce((sum, direction) => sum + direction, 0);
-  }, []);
+            try {
+                const gameResult = await playGame(
+                    difficulty,
+                    riskLevel,
+                    betAmount
+                );
 
-  const dropBall = useCallback(
-    async (difficulty: Difficulty, riskLevel: RiskLevel, betAmount: string) => {
-      if (!contractsValid) {
-        throw new Error('Contracts not configured. Please deploy contracts first.');
-      }
+                if (gameResult && gameResult.path) {
+                    const newBall: Ball = {
+                        id: `ball-${Date.now()}`,
+                        path: gameResult.path,
+                    };
+                    setBalls((prev) => [...prev, newBall]);
 
-      try {
-        // Start visual animation immediately
-        const path = generateBallPath(difficulty);
-        const finalPosition = calculateFinalPosition(path);
-        const multipliers = MULTIPLIERS[difficulty][riskLevel];
-        const finalMultiplier = multipliers[finalPosition] || 0;
+                    setTimeout(() => {
+                        console.log(
+                            "Animation finished. Updating balance and history."
+                        );
+                        refreshBalance();
+                        refreshHistory();
 
-        const newBall: Ball = {
-          id: `ball-${Date.now()}-${Math.random()}`,
-          x: 0,
-          y: 0,
-          vx: 0,
-          vy: 0,
-          path,
-          finalMultiplier,
-          isActive: true,
-        };
+                        setBalls((prev) =>
+                            prev.filter((b) => b.id !== newBall.id)
+                        );
+                    }, ANIMATION_DURATION_MS);
+                }
+                return gameResult;
+            } catch (err: any) {
+                console.error("Drop ball failed:", err);
+                throw err;
+            }
+        },
+        [playGame, contractsValid, refreshBalance, refreshHistory]
+    );
 
-        setBalls((prev) => [...prev, newBall]);
+    const handlePurchasePlink = useCallback(
+        async (injAmount: string) => {
+            if (!contractsValid) {
+                throw new Error(
+                    "Contracts not configured. Please deploy contracts first."
+                );
+            }
 
-        // Execute blockchain transaction
-        const result = await playGame(difficulty, riskLevel, betAmount);
+            await purchasePlink(injAmount);
+        },
+        [purchasePlink, contractsValid]
+    );
 
-        // Update ball with actual result after transaction
-        setTimeout(() => {
-          setBalls((prev) => prev.filter((b) => b.id !== newBall.id));
-        }, 3000);
-
-        return result;
-      } catch (err: any) {
-        // Remove ball on error
-        setBalls((prev) => prev.filter((b) => b.id !== newBall.id));
-        throw err;
-      }
-    },
-    [generateBallPath, calculateFinalPosition, playGame, contractsValid]
-  );
-
-  const handlePurchasePlink = useCallback(
-    async (injAmount: string) => {
-      if (!contractsValid) {
-        throw new Error('Contracts not configured. Please deploy contracts first.');
-      }
-
-      try {
-        await purchasePlink(injAmount);
-      } catch (err) {
-        throw err;
-      }
-    },
-    [purchasePlink, contractsValid]
-  );
-
-  return {
-    balls,
-    gameHistory,
-    plinkBalance,
-    isLoading,
-    error,
-    contractsValid,
-    dropBall,
-    purchasePlink: handlePurchasePlink,
-    refreshBalance,
-  };
+    return {
+        balls,
+        gameHistory,
+        plinkBalance,
+        isLoading,
+        error,
+        contractsValid,
+        dropBall,
+        purchasePlink: handlePurchasePlink,
+        refreshBalance,
+    };
 };

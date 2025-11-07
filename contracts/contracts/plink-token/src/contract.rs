@@ -5,9 +5,9 @@ use cw20_base::contract::{
     execute as cw20_execute, instantiate as cw20_instantiate, query as cw20_query,
 };
 use cw20_base::ContractError as Cw20ContractError;
+use cw20_base::state::{MinterData, TOKEN_INFO};
 
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::MINTER;
 
 #[entry_point]
 pub fn instantiate(
@@ -16,11 +16,6 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, Cw20ContractError> {
-    // Store minter if provided
-    if let Some(ref minter) = msg.mint {
-        let minter_addr = deps.api.addr_validate(&minter.minter)?;
-        MINTER.save(deps.storage, &minter_addr)?;
-    }
 
     // Use cw20-base instantiate
     let cw20_msg = cw20_base::msg::InstantiateMsg {
@@ -90,6 +85,30 @@ pub fn execute(
                 amount,
             };
             cw20_execute(deps, env, info, cw20_msg)
+        }
+        ExecuteMsg::UpdateMinter { new_minter } => {
+            let mut config = TOKEN_INFO.load(deps.storage)?;
+            
+            let current_minter_addr = config.mint.as_ref().map(|m| &m.minter);
+
+            if current_minter_addr != Some(&info.sender) {
+                return Err(Cw20ContractError::Unauthorized {});
+            }
+
+            let old_cap = config.mint.and_then(|m| m.cap);
+
+            let new_minter_addr = deps.api.addr_validate(&new_minter)?;
+
+            config.mint = Some(MinterData {
+                minter: new_minter_addr,
+                cap: old_cap,
+            });
+
+            TOKEN_INFO.save(deps.storage, &config)?;
+
+            Ok(Response::new()
+                .add_attribute("action", "update_minter")
+                .add_attribute("new_minter", new_minter))
         }
     }
 }
