@@ -25,6 +25,12 @@ mod tests {
         instantiate(deps, mock_env(), info, msg)
     }
 
+    fn fund_house(deps: DepsMut, amount: Uint128) -> Result<Response, ContractError> {
+        let msg = ExecuteMsg::FundHouse { amount };
+        let info = mock_info(ADMIN, &[]);
+        execute(deps, mock_env(), info, msg)
+    }
+
     #[test]
     fn test_instantiate() {
         let mut deps = mock_dependencies();
@@ -57,6 +63,9 @@ mod tests {
     fn test_play_game() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
+
+        // Fund house with enough to cover potential winnings (1000x max multiplier)
+        fund_house(deps.as_mut(), Uint128::new(100_000_000000000000000000)).unwrap();
 
         let msg = ExecuteMsg::Play {
             difficulty: Difficulty::Easy,
@@ -122,6 +131,9 @@ mod tests {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
 
+        // Fund house with enough for all games
+        fund_house(deps.as_mut(), Uint128::new(150_000_000000000000000000)).unwrap();
+
         let difficulties = vec![Difficulty::Easy, Difficulty::Medium, Difficulty::Hard];
 
         for difficulty in difficulties {
@@ -149,6 +161,9 @@ mod tests {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
 
+        // Fund house
+        fund_house(deps.as_mut(), Uint128::new(150_000_000000000000000000)).unwrap();
+
         let risk_levels = vec![RiskLevel::Low, RiskLevel::Medium, RiskLevel::High];
 
         for risk_level in risk_levels {
@@ -174,6 +189,9 @@ mod tests {
     fn test_game_history() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
+
+        // Fund house
+        fund_house(deps.as_mut(), Uint128::new(150_000_000000000000000000)).unwrap();
 
         // Play multiple games
         for i in 0..5 {
@@ -210,6 +228,9 @@ mod tests {
     fn test_game_history_limit() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
+
+        // Fund house
+        fund_house(deps.as_mut(), Uint128::new(100_000_000000000000000000)).unwrap();
 
         // Play 10 games
         for _ in 0..10 {
@@ -275,6 +296,9 @@ mod tests {
     fn test_withdraw_house() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
+
+        // Fund house first
+        fund_house(deps.as_mut(), Uint128::new(500_000000000000000000)).unwrap();
 
         // Play some games to build house balance
         for _ in 0..5 {
@@ -371,6 +395,9 @@ mod tests {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
 
+        // Fund house with enough capital
+        fund_house(deps.as_mut(), Uint128::new(1000_000000000000000000)).unwrap();
+
         // Play game where house should profit (low multiplier expected on average)
         for _ in 0..10 {
             let msg = ExecuteMsg::Play {
@@ -387,17 +414,11 @@ mod tests {
         let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
         let stats: StatsResponse = from_json(&res).unwrap();
 
-        // Debug: Print actual values
-        println!("Total wagered: {}", stats.total_wagered);
-        println!("Total won: {}", stats.total_won);
-        println!("House balance: {}", stats.house_balance);
-
-        // House balance should be total wagered minus total won
-        // Note: Due to the new logic, house_balance = sum(bets) - sum(wins)
-        // This should equal total_wagered - total_won
-        let expected_house_balance = stats.total_wagered.saturating_sub(stats.total_won);
-        
-        println!("Expected house balance: {}", expected_house_balance);
+        // House balance should be: initial_funding + total_wagered - total_won
+        let expected_house_balance = Uint128::new(1000_000000000000000000)
+            .checked_add(stats.total_wagered)
+            .unwrap()
+            .saturating_sub(stats.total_won);
         
         assert_eq!(stats.house_balance, expected_house_balance);
     }
@@ -406,6 +427,9 @@ mod tests {
     fn test_provably_fair_determinism() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut()).unwrap();
+
+        // Fund house
+        fund_house(deps.as_mut(), Uint128::new(200_000000000000000000)).unwrap();
 
         // Same player, same nonce should produce same result
         let env = mock_env();
@@ -441,5 +465,57 @@ mod tests {
 
         // Paths should be different (different nonce)
         assert_ne!(path1, path2);
+    }
+
+    #[test]
+    fn test_fund_house() {
+        let mut deps = mock_dependencies();
+        setup_contract(deps.as_mut()).unwrap();
+
+        let fund_amount = Uint128::new(1000_000000000000000000);
+        let res = fund_house(deps.as_mut(), fund_amount).unwrap();
+
+        assert_eq!(res.messages.len(), 1);
+        assert_eq!(
+            res.attributes,
+            vec![
+                ("action", "fund_house"),
+                ("amount", fund_amount.to_string().as_str()),
+            ]
+        );
+
+        // Check house balance updated
+        let query_msg = QueryMsg::Stats {};
+        let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let stats: StatsResponse = from_json(&res).unwrap();
+        assert_eq!(stats.house_balance, fund_amount);
+    }
+
+    #[test]
+    fn test_fund_house_unauthorized() {
+        let mut deps = mock_dependencies();
+        setup_contract(deps.as_mut()).unwrap();
+
+        let msg = ExecuteMsg::FundHouse {
+            amount: Uint128::new(1000_000000000000000000),
+        };
+        let info = mock_info(PLAYER, &[]);
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+
+        assert!(matches!(err, ContractError::Unauthorized {}));
+    }
+
+    #[test]
+    fn test_fund_house_zero_amount() {
+        let mut deps = mock_dependencies();
+        setup_contract(deps.as_mut()).unwrap();
+
+        let msg = ExecuteMsg::FundHouse {
+            amount: Uint128::zero(),
+        };
+        let info = mock_info(ADMIN, &[]);
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+
+        assert!(matches!(err, ContractError::InvalidBetAmount {}));
     }
 }

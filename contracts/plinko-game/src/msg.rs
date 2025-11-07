@@ -3,41 +3,43 @@ use cosmwasm_std::{Addr, Uint128};
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    /// Address of the $PLINK token contract
     pub plink_token_address: String,
-    /// House wallet that receives losing bets
     pub house_address: String,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// Play the game
     Play {
         difficulty: Difficulty,
         risk_level: RiskLevel,
         bet_amount: Uint128,
     },
-    /// Update house address (admin only)
-    UpdateHouse { new_house: String },
-    /// Withdraw house funds (admin only)
-    WithdrawHouse { amount: Uint128 },
+    UpdateHouse {
+        new_house: String,
+    },
+    WithdrawHouse {
+        amount: Uint128,
+    },
+    /// Fund the house with PLINK tokens (admin only)
+    /// Requires prior approval for the contract to transfer tokens
+    FundHouse {
+        amount: Uint128,
+    },
 }
 
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    /// Get current configuration
     #[returns(ConfigResponse)]
     Config {},
-    /// Get game statistics
     #[returns(StatsResponse)]
     Stats {},
-    /// Get game history for a player
     #[returns(HistoryResponse)]
     History { player: String, limit: Option<u32> },
 }
 
 #[cw_serde]
+#[derive(Clone)]
 pub enum Difficulty {
     Easy,   // 8 rows
     Medium, // 12 rows
@@ -45,6 +47,7 @@ pub enum Difficulty {
 }
 
 #[cw_serde]
+#[derive(Clone)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -80,5 +83,5 @@ pub struct GameRecord {
     pub multiplier: String,
     pub win_amount: Uint128,
     pub timestamp: u64,
-    pub path: Vec<u8>,
+    pub path: Vec<bool>,
 }

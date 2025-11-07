@@ -57,6 +57,7 @@ pub fn execute(
         } => execute_play(deps, env, info, difficulty, risk_level, bet_amount),
         ExecuteMsg::UpdateHouse { new_house } => execute_update_house(deps, info, new_house),
         ExecuteMsg::WithdrawHouse { amount } => execute_withdraw_house(deps, info, amount),
+        ExecuteMsg::FundHouse { amount } => execute_fund_house(deps, env, info, amount),
     }
 }
 
@@ -224,6 +225,45 @@ fn execute_withdraw_house(
     Ok(Response::new()
         .add_message(msg)
         .add_attribute("action", "withdraw_house")
+        .add_attribute("amount", amount))
+}
+
+fn execute_fund_house(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut stats = STATS.load(deps.storage)?;
+
+    // Only admin can fund the house
+    if info.sender != config.admin {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    if amount.is_zero() {
+        return Err(ContractError::InvalidBetAmount {});
+    }
+
+    // Update house balance
+    stats.house_balance = stats.house_balance.checked_add(amount)?;
+    STATS.save(deps.storage, &stats)?;
+
+    // Transfer tokens from admin to contract
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: config.plink_token_address.to_string(),
+        msg: to_json_binary(&Cw20ExecuteMsg::TransferFrom {
+            owner: info.sender.to_string(),
+            recipient: env.contract.address.to_string(),
+            amount,
+        })?,
+        funds: vec![],
+    });
+
+    Ok(Response::new()
+        .add_message(msg)
+        .add_attribute("action", "fund_house")
         .add_attribute("amount", amount))
 }
 
