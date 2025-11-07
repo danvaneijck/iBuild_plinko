@@ -1,13 +1,17 @@
 use cosmwasm_std::{
-    entry_point, to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
-    Uint128, CosmosMsg, WasmMsg, Addr,
+    entry_point, to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult, Uint128, WasmMsg,
 };
 use cw20::Cw20ExecuteMsg;
-use sha2::{Sha256, Digest};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, ConfigResponse, GameHistoryResponse, GameResult};
-use crate::state::{Config, GameHistory, CONFIG, GAME_HISTORY, NONCE};
+use crate::msg::{
+    ConfigResponse, Difficulty, ExecuteMsg, GameRecord, HistoryResponse, InstantiateMsg, QueryMsg,
+    RiskLevel, StatsResponse,
+};
+use crate::multipliers::{get_multipliers, get_rows};
+use crate::rng::{calculate_bucket_index, generate_ball_path};
+use crate::state::{Config, Stats, CONFIG, GAME_HISTORY, PLAYER_GAME_COUNT, STATS};
 
 #[entry_point]
 pub fn instantiate(
@@ -16,19 +20,26 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    let plink_token_address = deps.api.addr_validate(&msg.plink_token_address)?;
+    let house_address = deps.api.addr_validate(&msg.house_address)?;
+
     let config = Config {
-        plink_token: deps.api.addr_validate(&msg.plink_token)?,
-        admin: info.sender.clone(),
+        plink_token_address,
+        house_address,
+        admin: info.sender,
+    };
+
+    let stats = Stats {
+        total_games: 0,
+        total_wagered: Uint128::zero(),
+        total_won: Uint128::zero(),
         house_balance: Uint128::zero(),
     };
-    
+
     CONFIG.save(deps.storage, &config)?;
-    NONCE.save(deps.storage, &0u64)?;
-    
-    Ok(Response::new()
-        .add_attribute("action", "instantiate")
-        .add_attribute("admin", info.sender)
-        .add_attribute("plink_token", msg.plink_token))
+    STATS.save(deps.storage, &stats)?;
+
+    Ok(Response::new().add_attribute("action", "instantiate"))
 }
 
 #[entry_point]
@@ -39,118 +50,104 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::PlayGame { bet_amount, difficulty, risk } => {
-            execute_play_game(deps, env, info, bet_amount, difficulty, risk)
-        }
-        ExecuteMsg::FundHouse { amount } => execute_fund_house(deps, info, amount),
+        ExecuteMsg::Play {
+            difficulty,
+            risk_level,
+            bet_amount,
+        } => execute_play(deps, env, info, difficulty, risk_level, bet_amount),
+        ExecuteMsg::UpdateHouse { new_house } => execute_update_house(deps, info, new_house),
+        ExecuteMsg::WithdrawHouse { amount } => execute_withdraw_house(deps, info, amount),
+        ExecuteMsg::FundHouse { amount } => execute_fund_house(deps, env, info, amount),
     }
 }
 
-fn execute_fund_house(
-    deps: DepsMut,
-    info: MessageInfo,
-    amount: Uint128,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    
-    // Only admin can fund house
-    if info.sender != config.admin {
-        return Err(ContractError::Unauthorized {});
-    }
-    
-    // Update house balance
-    config.house_balance = config.house_balance.checked_add(amount)?;
-    CONFIG.save(deps.storage, &config)?;
-    
-    // Transfer PLINK from admin to contract
-    let transfer_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.plink_token.to_string(),
-        msg: to_json_binary(&Cw20ExecuteMsg::TransferFrom {
-            owner: info.sender.to_string(),
-            recipient: env.contract.address.to_string(),
-            amount,
-        })?,
-        funds: vec![],
-    });
-    
-    Ok(Response::new()
-        .add_message(transfer_msg)
-        .add_attribute("action", "fund_house")
-        .add_attribute("amount", amount)
-        .add_attribute("new_balance", config.house_balance))
-}
-
-fn execute_play_game(
+fn execute_play(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    difficulty: Difficulty,
+    risk_level: RiskLevel,
     bet_amount: Uint128,
-    difficulty: u8,
-    risk: u8,
 ) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    
-    // Validate difficulty (8, 12, or 16 rows)
-    if difficulty != 8 && difficulty != 12 && difficulty != 16 {
-        return Err(ContractError::InvalidDifficulty {});
+    if bet_amount.is_zero() {
+        return Err(ContractError::InvalidBetAmount {});
     }
-    
-    // Validate risk (0=Low, 1=Medium, 2=High)
-    if risk > 2 {
-        return Err(ContractError::InvalidRisk {});
-    }
-    
+
+    let config = CONFIG.load(deps.storage)?;
+    let mut stats = STATS.load(deps.storage)?;
+
+    // Get player's game count for nonce
+    let player_count = PLAYER_GAME_COUNT
+        .may_load(deps.storage, &info.sender)?
+        .unwrap_or(0);
+
     // Generate provably fair random path
-    let mut nonce = NONCE.load(deps.storage)?;
-    nonce += 1;
-    NONCE.save(deps.storage, &nonce)?;
-    
-    let path = generate_path(
-        env.block.height,
-        env.block.time.seconds(),
-        &info.sender,
-        nonce,
-        difficulty,
-    );
-    
-    // Calculate multiplier
-    let multiplier = calculate_multiplier(&path, difficulty, risk);
-    
-    // Calculate payout
-    let payout = bet_amount.checked_mul(Uint128::from(multiplier.0))?
-        .checked_div(Uint128::from(multiplier.1))?;
-    
-    // Check house has enough balance
-    if payout > config.house_balance {
-        return Err(ContractError::InsufficientHouseBalance {});
+    let rows = get_rows(&difficulty);
+    let path = generate_ball_path(&env, &info, player_count, rows);
+    let bucket_index = calculate_bucket_index(&path);
+
+    // Get multiplier for this bucket
+    let multipliers = get_multipliers(&difficulty, &risk_level);
+    if bucket_index >= multipliers.len() {
+        return Err(ContractError::InvalidMultiplierIndex {});
     }
-    
+
+    let (numerator, denominator) = multipliers[bucket_index];
+
+    // Calculate win amount: bet_amount * (numerator / denominator)
+    let win_amount = bet_amount
+        .checked_mul(Uint128::from(numerator))
+        .map_err(|_| ContractError::OverflowError {})?
+        .checked_div(Uint128::from(denominator))
+        .map_err(|_| ContractError::OverflowError {})?;
+
+    // Update stats
+    stats.total_games += 1;
+    stats.total_wagered = stats
+        .total_wagered
+        .checked_add(bet_amount)
+        .map_err(|_| ContractError::OverflowError {})?;
+    stats.total_won = stats
+        .total_won
+        .checked_add(win_amount)
+        .map_err(|_| ContractError::OverflowError {})?;
+
     // Update house balance
-    config.house_balance = config.house_balance.checked_sub(payout)?;
-    config.house_balance = config.house_balance.checked_add(bet_amount)?;
-    CONFIG.save(deps.storage, &config)?;
+    // House receives the bet amount
+    stats.house_balance = stats.house_balance.checked_add(bet_amount)?;
     
-    // Save game history
-    let game_result = GameResult {
+    // House pays out the win amount
+    // Use checked_sub to ensure we don't underflow - if this fails, house is insolvent
+    stats.house_balance = stats.house_balance.checked_sub(win_amount)?;
+
+    STATS.save(deps.storage, &stats)?;
+
+    // Update player game count
+    PLAYER_GAME_COUNT.save(deps.storage, &info.sender, &(player_count + 1))?;
+
+    // Convert Vec<u8> path to Vec<bool> for storage
+    let path_bool: Vec<bool> = path.iter().map(|&b| b != 0).collect();
+
+    // Save game record
+    let game_record = GameRecord {
         player: info.sender.clone(),
+        difficulty: difficulty.clone(),
+        risk_level: risk_level.clone(),
         bet_amount,
-        payout,
-        multiplier: (multiplier.0, multiplier.1),
-        path: path.clone(),
-        difficulty,
-        risk,
+        multiplier: format!("{}.{}x", numerator / denominator, (numerator % denominator) * 10 / denominator),
+        win_amount,
         timestamp: env.block.time.seconds(),
+        path: path_bool,
     };
-    
-    let history_key = (info.sender.as_bytes(), env.block.height);
-    GAME_HISTORY.save(deps.storage, history_key, &game_result)?;
-    
+
+    GAME_HISTORY.save(deps.storage, (&info.sender, player_count), &game_record)?;
+
     // Create messages
     let mut messages: Vec<CosmosMsg> = vec![];
-    
-    // Transfer bet from player to contract
+
+    // 1. Transfer bet amount from player to contract
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.plink_token.to_string(),
+        contract_addr: config.plink_token_address.to_string(),
         msg: to_json_binary(&Cw20ExecuteMsg::TransferFrom {
             owner: info.sender.to_string(),
             recipient: env.contract.address.to_string(),
@@ -158,192 +155,168 @@ fn execute_play_game(
         })?,
         funds: vec![],
     }));
-    
-    // Transfer payout to player
-    if !payout.is_zero() {
+
+    // 2. Transfer winnings to player
+    if !win_amount.is_zero() {
         messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: config.plink_token.to_string(),
+            contract_addr: config.plink_token_address.to_string(),
             msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                 recipient: info.sender.to_string(),
-                amount: payout,
+                amount: win_amount,
             })?,
             funds: vec![],
         }));
     }
-    
+
     Ok(Response::new()
         .add_messages(messages)
-        .add_attribute("action", "play_game")
+        .add_attribute("action", "play")
         .add_attribute("player", info.sender)
         .add_attribute("bet_amount", bet_amount)
-        .add_attribute("payout", payout)
-        .add_attribute("multiplier", format!("{}/{}", multiplier.0, multiplier.1))
-        .add_attribute("house_balance", config.house_balance))
+        .add_attribute("win_amount", win_amount)
+        .add_attribute("multiplier", format!("{}.{}", numerator / denominator, (numerator % denominator) * 10 / denominator))
+        .add_attribute("bucket", bucket_index.to_string()))
 }
 
-fn generate_path(
-    block_height: u64,
-    timestamp: u64,
-    player: &Addr,
-    nonce: u64,
-    rows: u8,
-) -> Vec<bool> {
-    let mut hasher = Sha256::new();
-    hasher.update(block_height.to_be_bytes());
-    hasher.update(timestamp.to_be_bytes());
-    hasher.update(player.as_bytes());
-    hasher.update(nonce.to_be_bytes());
-    let hash = hasher.finalize();
-    
-    let mut path = Vec::new();
-    for i in 0..rows {
-        let byte_index = (i / 8) as usize;
-        let bit_index = i % 8;
-        let bit = (hash[byte_index] >> bit_index) & 1;
-        path.push(bit == 1);
+fn execute_update_house(
+    deps: DepsMut,
+    info: MessageInfo,
+    new_house: String,
+) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+
+    if info.sender != config.admin {
+        return Err(ContractError::Unauthorized {});
     }
-    
-    path
+
+    config.house_address = deps.api.addr_validate(&new_house)?;
+    CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_house")
+        .add_attribute("new_house", new_house))
 }
 
-fn calculate_multiplier(path: &[bool], difficulty: u8, risk: u8) -> (u128, u128) {
-    let final_position = path.iter().filter(|&&x| x).count() as i32;
-    
-    // Multiplier tables (numerator, denominator)
-    match (difficulty, risk) {
-        // Easy (8 rows)
-        (8, 0) => match final_position { // Low risk
-            0 | 8 => (5, 10),
-            1 | 7 => (2, 1),
-            2 | 6 => (15, 10),
-            3 | 5 => (12, 10),
-            4 => (10, 10),
-            _ => (0, 1),
-        },
-        (8, 1) => match final_position { // Medium risk
-            0 | 8 => (13, 1),
-            1 | 7 => (3, 1),
-            2 | 6 => (14, 10),
-            3 | 5 => (12, 10),
-            4 => (10, 10),
-            _ => (0, 1),
-        },
-        (8, 2) => match final_position { // High risk
-            0 | 8 => (29, 1),
-            1 | 7 => (4, 1),
-            2 | 6 => (15, 10),
-            3 | 5 => (3, 10),
-            4 => (2, 10),
-            _ => (0, 1),
-        },
-        
-        // Medium (12 rows)
-        (12, 0) => match final_position { // Low risk
-            0 | 12 => (8, 1),
-            1 | 11 => (3, 1),
-            2 | 10 => (16, 10),
-            3 | 9 => (13, 10),
-            4 | 8 => (11, 10),
-            5 | 7 => (10, 10),
-            6 => (10, 10),
-            _ => (0, 1),
-        },
-        (12, 1) => match final_position { // Medium risk
-            0 | 12 => (18, 1),
-            1 | 11 => (4, 1),
-            2 | 10 => (15, 10),
-            3 | 9 => (12, 10),
-            4 | 8 => (11, 10),
-            5 | 7 => (10, 10),
-            6 => (9, 10),
-            _ => (0, 1),
-        },
-        (12, 2) => match final_position { // High risk
-            0 | 12 => (110, 1),
-            1 | 11 => (41, 1),
-            2 | 10 => (10, 1),
-            3 | 9 => (5, 1),
-            4 | 8 => (3, 1),
-            5 | 7 => (15, 10),
-            6 => (10, 10),
-            _ => (0, 1),
-        },
-        
-        // Hard (16 rows)
-        (16, 0) => match final_position { // Low risk
-            0 | 16 => (16, 1),
-            1 | 15 => (9, 1),
-            2 | 14 => (2, 1),
-            3 | 13 => (14, 10),
-            4 | 12 => (12, 10),
-            5 | 11 => (11, 10),
-            6 | 10 => (10, 10),
-            7 | 9 => (5, 10),
-            8 => (3, 10),
-            _ => (0, 1),
-        },
-        (16, 1) => match final_position { // Medium risk
-            0 | 16 => (33, 1),
-            1 | 15 => (11, 1),
-            2 | 14 => (4, 1),
-            3 | 13 => (2, 1),
-            4 | 12 => (15, 10),
-            5 | 11 => (12, 10),
-            6 | 10 => (11, 10),
-            7 | 9 => (10, 10),
-            8 => (8, 10),
-            _ => (0, 1),
-        },
-        (16, 2) => match final_position { // High risk
-            0 | 16 => (1000, 1), // 1000x max multiplier!
-            1 | 15 => (130, 1),
-            2 | 14 => (26, 1),
-            3 | 13 => (9, 1),
-            4 | 12 => (4, 1),
-            5 | 11 => (2, 1),
-            6 | 10 => (2, 10),
-            7 | 9 => (15, 100),
-            8 => (10, 100),
-            _ => (0, 1),
-        },
-        
-        _ => (0, 1),
+fn execute_withdraw_house(
+    deps: DepsMut,
+    info: MessageInfo,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut stats = STATS.load(deps.storage)?;
+
+    if info.sender != config.admin {
+        return Err(ContractError::Unauthorized {});
     }
+
+    if amount > stats.house_balance {
+        return Err(ContractError::InsufficientBalance {});
+    }
+
+    stats.house_balance = stats.house_balance.checked_sub(amount)?;
+    STATS.save(deps.storage, &stats)?;
+
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: config.plink_token_address.to_string(),
+        msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
+            recipient: config.house_address.to_string(),
+            amount,
+        })?,
+        funds: vec![],
+    });
+
+    Ok(Response::new()
+        .add_message(msg)
+        .add_attribute("action", "withdraw_house")
+        .add_attribute("amount", amount))
+}
+
+fn execute_fund_house(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    amount: Uint128,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut stats = STATS.load(deps.storage)?;
+
+    // Only admin can fund the house
+    if info.sender != config.admin {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    if amount.is_zero() {
+        return Err(ContractError::InvalidBetAmount {});
+    }
+
+    // Update house balance
+    stats.house_balance = stats.house_balance.checked_add(amount)?;
+    STATS.save(deps.storage, &stats)?;
+
+    // Transfer tokens from admin to contract
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: config.plink_token_address.to_string(),
+        msg: to_json_binary(&Cw20ExecuteMsg::TransferFrom {
+            owner: info.sender.to_string(),
+            recipient: env.contract.address.to_string(),
+            amount,
+        })?,
+        funds: vec![],
+    });
+
+    Ok(Response::new()
+        .add_message(msg)
+        .add_attribute("action", "fund_house")
+        .add_attribute("amount", amount))
 }
 
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        QueryMsg::GameHistory { player, limit } => {
-            to_json_binary(&query_game_history(deps, player, limit)?)
-        }
+        QueryMsg::Stats {} => to_json_binary(&query_stats(deps)?),
+        QueryMsg::History { player, limit } => to_json_binary(&query_history(deps, player, limit)?),
     }
 }
 
 fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
-        plink_token: config.plink_token.to_string(),
-        admin: config.admin.to_string(),
-        house_balance: config.house_balance,
+        plink_token_address: config.plink_token_address,
+        house_address: config.house_address,
+        admin: config.admin,
     })
 }
 
-fn query_game_history(
-    deps: Deps,
-    player: String,
-    limit: Option<u32>,
-) -> StdResult<GameHistoryResponse> {
+fn query_stats(deps: Deps) -> StdResult<StatsResponse> {
+    let stats = STATS.load(deps.storage)?;
+    Ok(StatsResponse {
+        total_games: stats.total_games,
+        total_wagered: stats.total_wagered,
+        total_won: stats.total_won,
+        house_balance: stats.house_balance,
+    })
+}
+
+fn query_history(deps: Deps, player: String, limit: Option<u32>) -> StdResult<HistoryResponse> {
     let player_addr = deps.api.addr_validate(&player)?;
-    let limit = limit.unwrap_or(10).min(100) as usize;
-    
-    let games: Vec<GameResult> = GAME_HISTORY
-        .prefix(player_addr.as_bytes())
-        .range(deps.storage, None, None, cosmwasm_std::Order::Descending)
-        .take(limit)
-        .map(|item| item.map(|(_, game)| game))
-        .collect::<StdResult<Vec<_>>>()?;
-    
-    Ok(GameHistoryResponse { games })
+    let player_count = PLAYER_GAME_COUNT
+        .may_load(deps.storage, &player_addr)?
+        .unwrap_or(0);
+
+    let limit = limit.unwrap_or(10).min(100) as u64;
+    let start = if player_count > limit {
+        player_count - limit
+    } else {
+        0
+    };
+
+    let mut games = Vec::new();
+    for i in start..player_count {
+        if let Some(game) = GAME_HISTORY.may_load(deps.storage, (&player_addr, i))? {
+            games.push(game);
+        }
+    }
+
+    Ok(HistoryResponse { games })
 }
