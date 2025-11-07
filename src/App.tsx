@@ -8,22 +8,30 @@ import { ContractStatus } from './components/ContractStatus';
 import { useWallet } from './hooks/useWallet';
 import { usePlinkoGame } from './hooks/usePlinkoGame';
 import { Coins } from 'lucide-react';
+import { Difficulty, RiskLevel } from './types/game';
+import { MULTIPLIERS } from './config/multipliers';
 
 function App() {
-  const { address, injectiveAddress, isConnecting, selectedWallet, error: walletError, connect, disconnect, isConnected } = useWallet();
-  const { 
-    balls, 
-    gameHistory, 
-    plinkBalance, 
+  const { address, injectiveAddress, isConnecting, selectedWallet: selectedWallet, error: walletError, connect, disconnect, isConnected } = useWallet();
+  const {
+    balls,
+    gameHistory,
+    plinkBalance,
     isLoading,
     error: gameError,
     contractsValid,
-    dropBall, 
+    dropBall,
     purchasePlink,
-    refreshBalance 
+    refreshBalance
   } = usePlinkoGame(address);
-  
+
+  // --- Add state for game settings ---
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [riskLevel, setRiskLevel] = useState<RiskLevel>('medium');
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+
+  // --- Derive multipliers from state ---
+  const multipliers = MULTIPLIERS[difficulty][riskLevel];
 
   const handlePurchase = async (injAmount: string) => {
     try {
@@ -35,7 +43,8 @@ function App() {
     }
   };
 
-  const handlePlay = async (difficulty: any, riskLevel: any, betAmount: string) => {
+  // The handlePlay function now uses the state variables
+  const handlePlay = async (betAmount: string) => {
     try {
       await dropBall(difficulty, riskLevel, betAmount);
     } catch (err) {
@@ -47,7 +56,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <ContractStatus />
-      
+
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -127,13 +136,21 @@ function App() {
                 plinkBalance={plinkBalance}
                 disabled={!contractsValid}
                 isLoading={isLoading}
+                difficulty={difficulty}
+                riskLevel={riskLevel}
+                onDifficultyChange={setDifficulty}
+                onRiskLevelChange={setRiskLevel}
               />
-              <GameHistory games={gameHistory} />
+              {/* <GameHistory games={gameHistory} /> */}
             </div>
 
             {/* Center Column - Plinko Board */}
             <div className="lg:col-span-2">
-              <PlinkoBoard balls={balls} />
+              <PlinkoBoard
+                balls={balls}
+                difficulty={difficulty}
+                multipliers={multipliers}
+              />
             </div>
           </div>
         )}

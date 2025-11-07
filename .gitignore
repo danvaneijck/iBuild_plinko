@@ -2,5 +2,6 @@ target/
 
 node_modules/
 
-
 */target/
+
+artifacts/
