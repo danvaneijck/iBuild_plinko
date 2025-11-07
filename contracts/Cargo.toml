@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "plink-token",
-    "purchase-contract",
-    "plinko-game",
+    "contracts/plink-token",
+    "contracts/purchase-contract",
+    "contracts/plinko-game",
 ]
 
 resolver = "2"
