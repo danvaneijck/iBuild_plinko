@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::contract::{execute, instantiate, query};
+    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::{from_json, Uint128};
-    use cw20::{BalanceResponse, Cw20Coin, Cw20ExecuteMsg as ExecuteMsg, Cw20QueryMsg as QueryMsg, MinterResponse, TokenInfoResponse};
-    use cw20_base::msg::InstantiateMsg;
+    use cw20::{BalanceResponse, Cw20Coin, MinterResponse, TokenInfoResponse};
     use cw20_base::ContractError as Cw20ContractError;
 
     const CREATOR: &str = "creator";
@@ -21,11 +21,10 @@ mod tests {
                 address: CREATOR.to_string(),
                 amount: Uint128::new(1000000),
             }],
-            mint: Some(cw20::MinterResponse {
+            mint: Some(MinterResponse {
                 minter: MINTER.to_string(),
                 cap: None,
             }),
-            marketing: None,
         };
 
         let info = mock_info(CREATOR, &[]);
