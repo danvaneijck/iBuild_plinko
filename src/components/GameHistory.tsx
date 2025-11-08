@@ -22,7 +22,7 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
             No games played yet. Start playing to see your history!
           </div>
         ) : (
-          history.sort((a, b) => b.timestamp - a.timestamp).map((result) => {
+          history.sort((a, b) => b.timestamp - a.timestamp).map((result, i) => {
 
             // ---- Step 2: Use BigInt for precise calculations ----
             const betAmountBigInt = BigInt(result.bet_amount || '0');
@@ -41,7 +41,7 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
 
             return (
               <div
-                key={result.timestamp}
+                key={result.timestamp + i}
                 className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-colors"
               >
                 <div className="flex items-center justify-between mb-2">

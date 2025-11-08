@@ -1,11 +1,10 @@
 import { useState, useCallback } from "react";
 import { Difficulty, RiskLevel, Ball } from "../types/game";
 import { useContracts } from "./useContracts";
-import { ROWS_CONFIG } from "../config/multipliers";
-export const ANIMATION_DURATION_MS = 3000;
 
 const CANVAS_WIDTH = 800;
 const SPACING = 45;
+const BALL_DROP_DELAY_MS = 200; // 200ms delay between ball drops
 
 export const usePlinkoGame = (userAddress: string) => {
     const [balls, setBalls] = useState<Ball[]>([]);
@@ -39,41 +38,45 @@ export const usePlinkoGame = (userAddress: string) => {
         async (
             difficulty: Difficulty,
             riskLevel: RiskLevel,
-            betAmount: string
+            betAmount: string,
+            numberOfBalls: number // New parameter
         ) => {
             if (!contractsValid) {
                 throw new Error("Contracts not configured.");
             }
 
             try {
-                const gameResult = await playGame(
+                const gameResults = await playGame(
                     difficulty,
                     riskLevel,
-                    betAmount
+                    betAmount,
+                    numberOfBalls
                 );
 
-                if (gameResult && gameResult.path) {
-                    // Calculate starting position based on first row center
-                    const rows = ROWS_CONFIG[difficulty];
-                    const firstRowPegs = 3; // First row always has 3 pegs
+                if (gameResults && gameResults.length > 0) {
+                    const firstRowPegs = 3;
                     const firstRowWidth = (firstRowPegs - 1) * SPACING;
                     const firstRowStartX = (CANVAS_WIDTH - firstRowWidth) / 2;
-                    const centerPegIndex = Math.floor(firstRowPegs / 2); // Middle peg (index 1 for 3 pegs)
+                    const centerPegIndex = Math.floor(firstRowPegs / 2);
                     const startX = firstRowStartX + centerPegIndex * SPACING;
 
-                    const newBall: Ball = {
-                        id: `ball-${Date.now()}`,
-                        path: gameResult.path,
-                        x: startX, // Start aligned with center peg of first row
-                        y: 40, // Start above the pegs
-                        vx: 0,
-                        vy: 0,
-                        currentRow: -1,
-                        pegIndex: centerPegIndex,
-                    };
-                    setBalls((prev) => [...prev, newBall]);
+                    // Loop through results and add each ball to the state with a delay
+                    gameResults.forEach((result, index) => {
+                        setTimeout(() => {
+                            const newBall: Ball = {
+                                id: result.ballId,
+                                path: result.path,
+                                x: startX,
+                                y: 40,
+                                vx: 0,
+                                vy: 0,
+                                currentRow: -1,
+                                pegIndex: centerPegIndex,
+                            };
+                            setBalls((prev) => [...prev, newBall]);
+                        }, index * BALL_DROP_DELAY_MS); // Stagger the animation
+                    });
                 }
-                return gameResult;
             } catch (err: any) {
                 console.error("Drop ball failed:", err);
                 throw err;

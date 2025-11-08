@@ -111,7 +111,8 @@ export const useContracts = (userAddress: string) => {
         async (
             difficulty: Difficulty,
             riskLevel: RiskLevel,
-            betAmount: string
+            betAmount: string,
+            numberOfBalls: number // New parameter
         ) => {
             const contractService = new ContractService(walletStrategy);
             if (!userAddress || !contractsValid) {
@@ -132,11 +133,12 @@ export const useContracts = (userAddress: string) => {
                     difficulty,
                     riskLevel,
                     betAmount,
+                    numberOfBalls,
                     userAddress
                 );
 
                 // Extract game result from transaction events
-                const gameResult = parseGameResult(result);
+                const gameResult = parseMultipleGameResults(result);
                 console.log("Parsed game result:", gameResult);
 
                 return gameResult;
@@ -150,6 +152,45 @@ export const useContracts = (userAddress: string) => {
         },
         [userAddress, plinkBalance, contractsValid]
     );
+
+    const parseMultipleGameResults = (txResult: any): GameResult[] => {
+        try {
+            const events = txResult?.events || [];
+            const wasmEvents = events.filter(
+                (e: any) =>
+                    e.type === "wasm" &&
+                    e.attributes.some(
+                        (a: any) => a.key === "action" && a.value === "play"
+                    )
+            );
+
+            if (wasmEvents.length === 0) return [];
+
+            return wasmEvents.map((event: any) => {
+                const attrs = event.attributes || [];
+                const getAttr = (key: string) =>
+                    attrs.find((a: any) => a.key === key)?.value;
+
+                const pathString = getAttr("path");
+                // Use a more robust unique ID
+                const uniqueId = `ball-${Date.now()}-${Math.random()
+                    .toString(36)
+                    .substring(2, 9)}`;
+
+                return {
+                    ballId: uniqueId,
+                    betAmount: getAttr("bet_amount"),
+                    multiplier: parseFloat(getAttr("multiplier")),
+                    winAmount: getAttr("win_amount"),
+                    timestamp: Date.now(),
+                    path: pathString ? pathString.split("").map(Number) : [],
+                };
+            });
+        } catch (err) {
+            console.error("Error parsing game results:", err);
+            return [];
+        }
+    };
 
     // Parse game result from transaction
     const parseGameResult = (txResult: any): GameResult | null => {
