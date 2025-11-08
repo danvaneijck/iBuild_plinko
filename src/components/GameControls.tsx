@@ -1,10 +1,8 @@
-// src/components/GameControls.tsx
-
 import React, { useState } from 'react';
 import { Difficulty, RiskLevel } from '../types/game';
 
 interface GameControlsProps {
-  onPlay: (betAmount: string) => void;
+  onPlay: (betAmount: string, numberOfBalls: number) => void; // Updated prop
   plinkBalance: string;
   disabled: boolean;
   isLoading: boolean;
@@ -25,10 +23,11 @@ export const GameControls: React.FC<GameControlsProps> = ({
   onRiskLevelChange,
 }) => {
   const [betAmount, setBetAmount] = useState('10');
+  const [numberOfBalls, setNumberOfBalls] = useState(1);
 
   const handlePlayClick = () => {
     if (!disabled && !isLoading) {
-      onPlay(betAmount);
+      onPlay(betAmount, numberOfBalls); // Call onPlay once
     }
   };
 
@@ -72,6 +71,21 @@ export const GameControls: React.FC<GameControlsProps> = ({
         <p className="text-xs text-gray-400 mt-2">
           Your balance: <span className="font-bold text-purple-400">{plinkBalance} $PLINK</span>
         </p>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-gray-400">Number of Balls</label>
+        <div className="mt-2 flex">
+          <input
+            type="number"
+            value={numberOfBalls}
+            onChange={(e) => setNumberOfBalls(parseInt(e.target.value, 10))}
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            placeholder="Enter number of balls"
+            min="1"
+            disabled={disabled || isLoading}
+          />
+        </div>
       </div>
 
       <div>

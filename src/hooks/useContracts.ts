@@ -64,6 +64,21 @@ export const useContracts = (userAddress: string) => {
         }
     }, [userAddress, contractsValid]);
 
+    const getGameHistory = useCallback(
+        async (limit: number = 20) => {
+            const contractService = new ContractService(walletStrategy);
+
+            if (!userAddress || !contractsValid) return [];
+            try {
+                return await contractService.getGameHistory(userAddress, limit);
+            } catch (err: any) {
+                console.error("Error fetching history:", err);
+                return [];
+            }
+        },
+        [userAddress, contractsValid]
+    );
+
     // Auto-fetch on address change
     useEffect(() => {
         if (userAddress && contractsValid) {
@@ -111,7 +126,8 @@ export const useContracts = (userAddress: string) => {
         async (
             difficulty: Difficulty,
             riskLevel: RiskLevel,
-            betAmount: string
+            betAmount: string,
+            numberOfBalls: number // New parameter
         ) => {
             const contractService = new ContractService(walletStrategy);
             if (!userAddress || !contractsValid) {
@@ -132,12 +148,12 @@ export const useContracts = (userAddress: string) => {
                     difficulty,
                     riskLevel,
                     betAmount,
+                    numberOfBalls,
                     userAddress
                 );
 
                 // Extract game result from transaction events
-                const gameResult = parseGameResult(result);
-                console.log("Parsed game result:", gameResult);
+                const gameResult = parseMultipleGameResults(result);
 
                 return gameResult;
             } catch (err: any) {
@@ -151,12 +167,59 @@ export const useContracts = (userAddress: string) => {
         [userAddress, plinkBalance, contractsValid]
     );
 
+    const parseMultipleGameResults = (txResult: any): GameResult[] => {
+        try {
+            const events = txResult?.events || [];
+            const wasmEvents = events.filter(
+                (e: any) =>
+                    e.type === "wasm" &&
+                    e.attributes.some(
+                        (a: any) => a.key === "action" && a.value === "play"
+                    )
+            );
+
+            if (wasmEvents.length === 0) return [];
+
+            return wasmEvents.map((event: any, i) => {
+                const attrs = event.attributes || [];
+                const getAttr = (key: string) =>
+                    attrs.find((a: any) => a.key === key)?.value;
+
+                const pathString = getAttr("path");
+                // Use a more robust unique ID
+                const uniqueId = `ball-${Date.now()}-${Math.random()
+                    .toString(36)
+                    .substring(2, 9)}`;
+
+                return {
+                    ballId: uniqueId,
+                    bet_amount: getAttr("bet_amount"),
+                    multiplier: `${parseFloat(getAttr("multiplier"))}x`,
+                    win_amount: getAttr("win_amount"),
+                    timestamp: Date.parse(txResult.timestamp) / 1000,
+                    path: pathString ? pathString.split("").map(Number) : [],
+                    eventIndex: i,
+                };
+            });
+        } catch (err) {
+            console.error("Error parsing game results:", err);
+            return [];
+        }
+    };
+
     // Parse game result from transaction
     const parseGameResult = (txResult: any): GameResult | null => {
         try {
+            console.log("Transaction result:", txResult);
             // Extract attributes from transaction events
             const events = txResult?.events || [];
-            const wasmEvent = events.find((e: any) => e.type === "wasm");
+            const wasmEvent = events.find(
+                (e: any) =>
+                    e.type === "wasm" &&
+                    e.attributes.some(
+                        (a) => a.key == "action" && a.value == "play"
+                    )
+            );
 
             if (!wasmEvent) return null;
 
@@ -201,6 +264,6 @@ export const useContracts = (userAddress: string) => {
         purchasePlink,
         playGame,
         refreshBalance: fetchPlinkBalance,
-        refreshHistory: fetchGameHistory,
+        getGameHistory,
     };
 };

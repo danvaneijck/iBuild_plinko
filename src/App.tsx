@@ -46,12 +46,13 @@ function App() {
   };
 
   // The handlePlay function now uses the state variables
-  const handlePlay = async (betAmount: string) => {
+  const handlePlay = async (betAmount: string, numberOfBalls: number) => {
     try {
-      await dropBall(difficulty, riskLevel, betAmount);
+      // Pass all arguments to the dropBall hook function
+      await dropBall(difficulty, riskLevel, betAmount, numberOfBalls);
     } catch (err) {
       console.error('Game failed:', err);
-      throw err;
+      // Optionally, show this error in the UI
     }
   };
 

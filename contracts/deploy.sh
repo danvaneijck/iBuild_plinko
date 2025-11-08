@@ -11,6 +11,9 @@ PASSWORD="12345678"
 TREASURY_ADDRESS="inj1q2m26a7jdzjyfdn545vqsude3zwwtfrdap5jgz"
 DEPLOYER=$TREASURY_ADDRESS
 
+INITIAL_HOUSE_FUND="1000000000000000000000000"
+
+
 store_contract() {
     local wasm_file="$1"
     echo "📦 Storing contract: $wasm_file..." >&2
@@ -136,6 +139,11 @@ PLINK_TOKEN_ADDRESS=$(instantiate_contract "$PLINK_CODE_ID" "$INIT_PLINK" "plink
 echo "✅ PLINK Token Address: $PLINK_TOKEN_ADDRESS"
 echo ""
 
+MINT_FOR_HOUSE_MSG="{\"mint\":{\"recipient\":\"$DEPLOYER\",\"amount\":\"$INITIAL_HOUSE_FUND\"}}"
+execute_contract "$PLINK_TOKEN_ADDRESS" "$MINT_FOR_HOUSE_MSG"
+echo "✅ Minted $INITIAL_HOUSE_FUND PLINK to deployer account"
+echo ""
+
 PURCHASE_CODE_ID=$(store_contract "artifacts/purchase_contract.wasm")
 echo "✅ Purchase Contract Code ID: $PURCHASE_CODE_ID"
 echo ""
@@ -170,6 +178,17 @@ EOF
 )
 GAME_CONTRACT_ADDRESS=$(instantiate_contract "$GAME_CODE_ID" "$INIT_GAME" "plinko-game" "$DEPLOYER")
 echo "✅ Plinko Game Address: $GAME_CONTRACT_ADDRESS"
+echo ""
+
+INCREASE_ALLOWANCE_MSG="{\"increase_allowance\":{\"spender\":\"$GAME_CONTRACT_ADDRESS\",\"amount\":\"$INITIAL_HOUSE_FUND\"}}"
+execute_contract "$PLINK_TOKEN_ADDRESS" "$INCREASE_ALLOWANCE_MSG"
+echo "✅ Approved Plinko Game to spend $INITIAL_HOUSE_FUND PLINK"
+echo ""
+
+## ==> Step 3: Execute the FundHouse message on the Game Contract to transfer the tokens.
+FUND_HOUSE_MSG="{\"fund_house\":{\"amount\":\"$INITIAL_HOUSE_FUND\"}}"
+execute_contract "$GAME_CONTRACT_ADDRESS" "$FUND_HOUSE_MSG"
+echo "✅ Successfully funded the Plinko Game contract with $INITIAL_HOUSE_FUND PLINK"
 echo ""
 
 echo "✅ Deployment complete!"

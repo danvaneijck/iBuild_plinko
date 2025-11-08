@@ -1,67 +1,107 @@
-import { useState, useCallback } from "react";
-import { Difficulty, RiskLevel, Ball } from "../types/game";
+import { useState, useCallback, useEffect } from "react";
+import { Difficulty, RiskLevel, Ball, GameResult } from "../types/game";
 import { useContracts } from "./useContracts";
-export const ANIMATION_DURATION_MS = 3000;
+
+const CANVAS_WIDTH = 800;
+const SPACING = 45;
+const BALL_DROP_DELAY_MS = 200; // 200ms delay between ball drops
 
 export const usePlinkoGame = (userAddress: string) => {
     const [balls, setBalls] = useState<Ball[]>([]);
+    const [gameHistory, setGameHistory] = useState<GameResult[]>([]);
+    const [pendingResults, setPendingResults] = useState<GameResult[]>([]);
+
     const {
         plinkBalance,
-        gameHistory,
         isLoading,
         error,
         contractsValid,
         purchasePlink,
         playGame,
         refreshBalance,
-        refreshHistory,
+        getGameHistory,
     } = useContracts(userAddress);
+
+    useEffect(() => {
+        const fetchInitialHistory = async () => {
+            if (userAddress && contractsValid) {
+                const history = await getGameHistory(20);
+                setGameHistory(history);
+            }
+        };
+        fetchInitialHistory();
+    }, [userAddress, contractsValid, getGameHistory]);
 
     const handleAnimationComplete = useCallback(
         (ballId: string) => {
-            console.log(`Animation for ${ballId} complete. Refreshing data.`);
+            // Find the result for the ball that just finished animating
+            const finishedResult = pendingResults.find(
+                (p) => p.ballId === ballId
+            );
 
-            // Refresh the user's balance and game history.
+            if (finishedResult) {
+                // Add the finished result to the top of the visible history list
+                setGameHistory((prev) => [finishedResult, ...prev]);
+                // Remove it from the pending queue
+                setPendingResults((prev) =>
+                    prev.filter((p) => p.ballId !== ballId)
+                );
+            }
+
+            // Refresh balance now that the outcome is settled
             refreshBalance();
-            refreshHistory();
 
-            // Remove the completed ball from the state.
+            // Remove the ball from the animation board
             setBalls((prev) => prev.filter((b) => b.id !== ballId));
         },
-        [refreshBalance, refreshHistory]
-    ); // Dependencies
+        [pendingResults, refreshBalance]
+    );
 
     const dropBall = useCallback(
         async (
             difficulty: Difficulty,
             riskLevel: RiskLevel,
-            betAmount: string
+            betAmount: string,
+            numberOfBalls: number // New parameter
         ) => {
             if (!contractsValid) {
                 throw new Error("Contracts not configured.");
             }
 
             try {
-                const gameResult = await playGame(
+                const gameResults = await playGame(
                     difficulty,
                     riskLevel,
-                    betAmount
+                    betAmount,
+                    numberOfBalls
                 );
 
-                if (gameResult && gameResult.path) {
-                    const newBall: Ball = {
-                        id: `ball-${Date.now()}`,
-                        path: gameResult.path,
-                        x: 400, // Assuming canvas width is 800
-                        y: 40, // Start above the pegs
-                        vx: 0,
-                        vy: 0,
-                        currentRow: -1,
-                        pegIndex: 1,
-                    };
-                    setBalls((prev) => [...prev, newBall]);
+                if (gameResults && gameResults.length > 0) {
+                    setPendingResults((prev) => [...prev, ...gameResults]);
+
+                    const firstRowPegs = 3;
+                    const firstRowWidth = (firstRowPegs - 1) * SPACING;
+                    const firstRowStartX = (CANVAS_WIDTH - firstRowWidth) / 2;
+                    const centerPegIndex = Math.floor(firstRowPegs / 2);
+                    const startX = firstRowStartX + centerPegIndex * SPACING;
+
+                    // Loop through results and add each ball to the state with a delay
+                    gameResults.forEach((result, index) => {
+                        setTimeout(() => {
+                            const newBall: Ball = {
+                                id: result.ballId,
+                                path: result.path,
+                                x: startX,
+                                y: 40,
+                                vx: 0,
+                                vy: 0,
+                                currentRow: -1,
+                                pegIndex: centerPegIndex,
+                            };
+                            setBalls((prev) => [...prev, newBall]);
+                        }, index * BALL_DROP_DELAY_MS); // Stagger the animation
+                    });
                 }
-                return gameResult;
             } catch (err: any) {
                 console.error("Drop ball failed:", err);
                 throw err;

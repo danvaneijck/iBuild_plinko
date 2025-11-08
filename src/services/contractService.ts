@@ -223,6 +223,7 @@ export class ContractService {
         difficulty: Difficulty,
         riskLevel: RiskLevel,
         betAmount: string,
+        numberOfPlays: number,
         userAddress: string
     ): Promise<any> {
         try {
@@ -236,32 +237,57 @@ export class ContractService {
                 gasBufferCoefficient: 1.2,
             });
 
-            // Convert bet amount to base units
-            const baseAmount = new BigNumberInBase(betAmount)
-                .times(new BigNumberInBase(10).pow(18))
+            const singleBetBaseAmount = new BigNumberInBase(betAmount).times(
+                new BigNumberInBase(10).pow(18)
+            );
+
+            const totalBetAmount = new BigNumberInBase(betAmount).times(
+                numberOfPlays
+            );
+            const totalBetBaseAmount = singleBetBaseAmount
+                .times(numberOfPlays)
                 .toFixed(0);
 
-            // Check allowance first
+            // This array will hold all messages for our single transaction
+            const messages: MsgExecuteContractCompat[] = [];
+
+            // Step 1: Check the current PLINK allowance
             const allowance = await this.getPlinkAllowance(userAddress);
-            if (parseFloat(allowance) < parseFloat(betAmount)) {
-                // Approve spending
-                await this.approvePlinkSpending(betAmount, userAddress);
+
+            // Step 2: If allowance is less than the total required, add an approval message
+            if (new BigNumberInBase(allowance).lt(totalBetAmount)) {
+                const approvalMsg = MsgExecuteContractCompat.fromJSON({
+                    contractAddress: CONTRACTS.plinkToken,
+                    sender: injectiveAddress,
+                    msg: {
+                        increase_allowance: {
+                            spender: CONTRACTS.game,
+                            amount: totalBetBaseAmount, // Approve the total amount
+                        },
+                    },
+                });
+                messages.push(approvalMsg);
             }
 
-            const msg = MsgExecuteContractCompat.fromJSON({
-                contractAddress: CONTRACTS.game,
-                sender: injectiveAddress,
-                msg: {
-                    play: {
-                        difficulty: this.mapDifficulty(difficulty),
-                        risk_level: this.mapRiskLevel(riskLevel),
-                        bet_amount: baseAmount,
+            // Step 3: Create and add a 'play' message for each ball
+            for (let i = 0; i < numberOfPlays; i++) {
+                const playMsg = MsgExecuteContractCompat.fromJSON({
+                    contractAddress: CONTRACTS.game,
+                    sender: injectiveAddress,
+                    msg: {
+                        play: {
+                            difficulty: this.mapDifficulty(difficulty),
+                            risk_level: this.mapRiskLevel(riskLevel),
+                            bet_amount: singleBetBaseAmount.toFixed(0),
+                        },
                     },
-                },
-            });
+                });
+                messages.push(playMsg);
+            }
 
+            // Step 4: Broadcast the single transaction with all messages
             const result = await this.msgBroadcaster.broadcast({
-                msgs: msg,
+                msgs: messages,
                 injectiveAddress,
             });
 
