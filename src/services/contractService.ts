@@ -236,19 +236,33 @@ export class ContractService {
                 gasBufferCoefficient: 1.2,
             });
 
-            // Convert bet amount to base units
             const baseAmount = new BigNumberInBase(betAmount)
                 .times(new BigNumberInBase(10).pow(18))
                 .toFixed(0);
 
-            // Check allowance first
+            // This array will hold all messages for our single transaction
+            const messages: MsgExecuteContractCompat[] = [];
+
+            // Step 1: Check the current PLINK allowance
             const allowance = await this.getPlinkAllowance(userAddress);
-            if (parseFloat(allowance) < parseFloat(betAmount)) {
-                // Approve spending
-                await this.approvePlinkSpending(betAmount, userAddress);
+
+            // Step 2: If allowance is less than the bet amount, create and add the approval message
+            if (new BigNumberInBase(allowance).lt(betAmount)) {
+                const approvalMsg = MsgExecuteContractCompat.fromJSON({
+                    contractAddress: CONTRACTS.plinkToken,
+                    sender: injectiveAddress,
+                    msg: {
+                        increase_allowance: {
+                            spender: CONTRACTS.game,
+                            amount: baseAmount,
+                        },
+                    },
+                });
+                messages.push(approvalMsg);
             }
 
-            const msg = MsgExecuteContractCompat.fromJSON({
+            // Step 3: Always create and add the 'play' message
+            const playMsg = MsgExecuteContractCompat.fromJSON({
                 contractAddress: CONTRACTS.game,
                 sender: injectiveAddress,
                 msg: {
@@ -259,9 +273,11 @@ export class ContractService {
                     },
                 },
             });
+            messages.push(playMsg);
 
+            // Step 4: Broadcast the array of messages. This will be either [approve, play] or just [play].
             const result = await this.msgBroadcaster.broadcast({
-                msgs: msg,
+                msgs: messages,
                 injectiveAddress,
             });
 

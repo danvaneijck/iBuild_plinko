@@ -1,7 +1,11 @@
 import { useState, useCallback } from "react";
 import { Difficulty, RiskLevel, Ball } from "../types/game";
 import { useContracts } from "./useContracts";
+import { ROWS_CONFIG } from "../config/multipliers";
 export const ANIMATION_DURATION_MS = 3000;
+
+const CANVAS_WIDTH = 800;
+const SPACING = 45;
 
 export const usePlinkoGame = (userAddress: string) => {
     const [balls, setBalls] = useState<Ball[]>([]);
@@ -49,15 +53,23 @@ export const usePlinkoGame = (userAddress: string) => {
                 );
 
                 if (gameResult && gameResult.path) {
+                    // Calculate starting position based on first row center
+                    const rows = ROWS_CONFIG[difficulty];
+                    const firstRowPegs = 3; // First row always has 3 pegs
+                    const firstRowWidth = (firstRowPegs - 1) * SPACING;
+                    const firstRowStartX = (CANVAS_WIDTH - firstRowWidth) / 2;
+                    const centerPegIndex = Math.floor(firstRowPegs / 2); // Middle peg (index 1 for 3 pegs)
+                    const startX = firstRowStartX + centerPegIndex * SPACING;
+
                     const newBall: Ball = {
                         id: `ball-${Date.now()}`,
                         path: gameResult.path,
-                        x: 400, // Assuming canvas width is 800
+                        x: startX, // Start aligned with center peg of first row
                         y: 40, // Start above the pegs
                         vx: 0,
                         vy: 0,
                         currentRow: -1,
-                        pegIndex: 1,
+                        pegIndex: centerPegIndex,
                     };
                     setBalls((prev) => [...prev, newBall]);
                 }

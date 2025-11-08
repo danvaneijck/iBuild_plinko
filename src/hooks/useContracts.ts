@@ -154,9 +154,16 @@ export const useContracts = (userAddress: string) => {
     // Parse game result from transaction
     const parseGameResult = (txResult: any): GameResult | null => {
         try {
+            console.log("Transaction result:", txResult);
             // Extract attributes from transaction events
             const events = txResult?.events || [];
-            const wasmEvent = events.find((e: any) => e.type === "wasm");
+            const wasmEvent = events.find(
+                (e: any) =>
+                    e.type === "wasm" &&
+                    e.attributes.some(
+                        (a) => a.key == "action" && a.value == "play"
+                    )
+            );
 
             if (!wasmEvent) return null;
 

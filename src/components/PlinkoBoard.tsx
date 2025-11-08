@@ -8,7 +8,8 @@ const PEG_RADIUS = 5;
 const BALL_RADIUS = 9;
 const SPACING = 45;
 const BUCKET_HEIGHT = 40; // Height of the buckets at the bottom
-const STEERING_FACTOR = 0.1;
+const STEERING_FACTOR = 0.15; // Increased for stronger steering
+const CANVAS_WIDTH = 800;
 
 // --- Type extension for Matter.Body ---
 // This lets us attach our game-specific data directly to the physics body
@@ -95,17 +96,33 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
 
     const bucketBottomY = rows * SPACING + 60 + (BUCKET_HEIGHT / 2);
     const bucketTopY = rows * SPACING + 60 - (BUCKET_HEIGHT / 2);
-    const bucketWidth = 62;
+
+    // --- Corrected Bucket Alignment Logic ---
+    // A bucket's width should be equal to the horizontal distance between pegs.
+    const bucketWidth = SPACING;
+
+    // The total width occupied by all buckets.
+    const totalBucketsWidth = multipliers.length * bucketWidth;
+
+    // Calculate the starting X-position to center the entire block of buckets in the canvas.
+    const bucketsStartX = (CANVAS_WIDTH - totalBucketsWidth) / 2;
+
+    // Create (multipliers.length + 1) walls to form (multipliers.length) buckets.
     for (let i = 0; i <= multipliers.length; i++) {
-      const x = 400 - (multipliers.length / 2) * bucketWidth + i * bucketWidth;
-      const bucketWall = Matter.Bodies.rectangle(x, bucketBottomY, 5, BUCKET_HEIGHT, { isStatic: true, render: { fillStyle: '#6b21a8' } });
-      const wallTopper = Matter.Bodies.circle(x, bucketTopY, 2, { isStatic: true, render: { fillStyle: '#6b21a8' } });
+      const x = bucketsStartX + i * bucketWidth;
+      const bucketWall = Matter.Bodies.rectangle(x, bucketBottomY, 5, BUCKET_HEIGHT, {
+        isStatic: true,
+        render: { fillStyle: '#6b21a8' },
+      });
+      const wallTopper = Matter.Bodies.circle(x, bucketTopY, 2, {
+        isStatic: true,
+        render: { fillStyle: '#6b21a8' },
+      });
       staticBodies.push(bucketWall, wallTopper);
     }
 
     Matter.Composite.add(engine.world, staticBodies);
 
-    // --- EVENT 1: Determine Next Target on Collision ---
     Matter.Events.on(engine, 'collisionStart', (event) => {
       for (const pair of event.pairs) {
         const { bodyA, bodyB } = pair;
@@ -127,25 +144,34 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
 
           if (ballBody.currentRow < pegRow) {
             ballBody.currentRow = pegRow;
-
             const direction = ballBody.path[pegRow];
-            if (direction !== undefined && pegRow < rows - 1) {
-              // Calculate the index of the next peg in the row below
-              // 0 (left) means the next peg has the same index
-              // 1 (right) means the next peg has index + 1
+
+            if (direction === undefined) {
+              ballBody.targetX = undefined;
+              return;
+            }
+
+
+            if (pegRow === rows - 1) {
+
+              const finalBucketIndex = ballBody.path.reduce((sum, dir) => sum + dir, 0);
+
+              const bucketWidth = SPACING;
+              const totalBucketsWidth = multipliers.length * bucketWidth;
+              const bucketsStartX = (CANVAS_WIDTH - totalBucketsWidth) / 2;
+
+              const finalTargetX = bucketsStartX + (finalBucketIndex * bucketWidth) + (bucketWidth / 2);
+
+              ballBody.targetX = finalTargetX;
+
+            } else {
               const nextPegIndex = pegIndex + direction;
               const nextRow = pegRow + 1;
-
-              // Find that next peg in our stored refs
               const targetPeg = pegsRef.current.find(p => p.label === `peg-${nextRow}-${nextPegIndex}`);
 
               if (targetPeg) {
-                // Set the target X for our steering mechanism
                 ballBody.targetX = targetPeg.position.x;
               }
-            } else {
-              // If it's the last row or path ends, clear the target
-              ballBody.targetX = undefined;
             }
           }
         }
@@ -261,11 +287,16 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
         key={rows}
         className="w-full bg-gradient-to-b from-gray-900 to-gray-800 rounded-2xl border border-gray-700 shadow-2xl"
       />
-      <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-1 px-10 pt-32 ">
+      <div
+        className="absolute bottom-0 left-0 right-0 flex justify-center items-end gap-1"
+        // You can adjust this padding to move the labels up or down as needed
+        style={{ paddingBottom: '0px' }}
+      >
         {multipliers.map((mult, idx) => (
           <div
             key={idx}
-            className={`flex-1 max-w-[60px] py-3 rounded-t-lg bg-gradient-to-br ${getMultiplierColor(
+            style={{ width: `43px` }}
+            className={`py-3  rounded-t-lg bg-gradient-to-br ${getMultiplierColor(
               mult
             )} text-white font-bold text-center shadow-lg`}
           >
