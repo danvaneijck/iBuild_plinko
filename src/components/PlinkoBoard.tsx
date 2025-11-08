@@ -94,32 +94,32 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
     staticBodies.push(Matter.Bodies.rectangle(-10, 300, 20, 1000, { isStatic: true, render: { visible: false } }));
     staticBodies.push(Matter.Bodies.rectangle(810, 300, 20, 1000, { isStatic: true, render: { visible: false } }));
 
-    const bucketBottomY = rows * SPACING + 60 + (BUCKET_HEIGHT / 2);
-    const bucketTopY = rows * SPACING + 60 - (BUCKET_HEIGHT / 2);
+    // const bucketBottomY = rows * SPACING + 60 + (BUCKET_HEIGHT / 2);
+    // const bucketTopY = rows * SPACING + 60 - (BUCKET_HEIGHT / 2);
 
-    // --- Corrected Bucket Alignment Logic ---
-    // A bucket's width should be equal to the horizontal distance between pegs.
-    const bucketWidth = SPACING;
+    // // --- Corrected Bucket Alignment Logic ---
+    // // A bucket's width should be equal to the horizontal distance between pegs.
+    // const bucketWidth = SPACING;
 
-    // The total width occupied by all buckets.
-    const totalBucketsWidth = multipliers.length * bucketWidth;
+    // // The total width occupied by all buckets.
+    // const totalBucketsWidth = multipliers.length * bucketWidth;
 
-    // Calculate the starting X-position to center the entire block of buckets in the canvas.
-    const bucketsStartX = (CANVAS_WIDTH - totalBucketsWidth) / 2;
+    // // Calculate the starting X-position to center the entire block of buckets in the canvas.
+    // const bucketsStartX = (CANVAS_WIDTH - totalBucketsWidth) / 2;
 
-    // Create (multipliers.length + 1) walls to form (multipliers.length) buckets.
-    for (let i = 0; i <= multipliers.length; i++) {
-      const x = bucketsStartX + i * bucketWidth;
-      const bucketWall = Matter.Bodies.rectangle(x, bucketBottomY, 5, BUCKET_HEIGHT, {
-        isStatic: true,
-        render: { fillStyle: '#6b21a8' },
-      });
-      const wallTopper = Matter.Bodies.circle(x, bucketTopY, 2, {
-        isStatic: true,
-        render: { fillStyle: '#6b21a8' },
-      });
-      staticBodies.push(bucketWall, wallTopper);
-    }
+    // // Create (multipliers.length + 1) walls to form (multipliers.length) buckets.
+    // for (let i = 0; i <= multipliers.length; i++) {
+    //   const x = bucketsStartX + i * bucketWidth;
+    //   const bucketWall = Matter.Bodies.rectangle(x, bucketBottomY, 5, BUCKET_HEIGHT, {
+    //     isStatic: true,
+    //     render: { fillStyle: '#6b21a8' },
+    //   });
+    //   const wallTopper = Matter.Bodies.circle(x, bucketTopY, 2, {
+    //     isStatic: true,
+    //     render: { fillStyle: '#6b21a8' },
+    //   });
+    //   staticBodies.push(bucketWall);
+    // }
 
     Matter.Composite.add(engine.world, staticBodies);
 

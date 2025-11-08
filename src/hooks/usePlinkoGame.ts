@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Difficulty, RiskLevel, Ball } from "../types/game";
+import { useState, useCallback, useEffect } from "react";
+import { Difficulty, RiskLevel, Ball, GameResult } from "../types/game";
 import { useContracts } from "./useContracts";
 
 const CANVAS_WIDTH = 800;
@@ -8,31 +8,54 @@ const BALL_DROP_DELAY_MS = 200; // 200ms delay between ball drops
 
 export const usePlinkoGame = (userAddress: string) => {
     const [balls, setBalls] = useState<Ball[]>([]);
+    const [gameHistory, setGameHistory] = useState<GameResult[]>([]);
+    const [pendingResults, setPendingResults] = useState<GameResult[]>([]);
+
     const {
         plinkBalance,
-        gameHistory,
         isLoading,
         error,
         contractsValid,
         purchasePlink,
         playGame,
         refreshBalance,
-        refreshHistory,
+        getGameHistory,
     } = useContracts(userAddress);
+
+    useEffect(() => {
+        const fetchInitialHistory = async () => {
+            if (userAddress && contractsValid) {
+                const history = await getGameHistory(20);
+                setGameHistory(history);
+            }
+        };
+        fetchInitialHistory();
+    }, [userAddress, contractsValid, getGameHistory]);
 
     const handleAnimationComplete = useCallback(
         (ballId: string) => {
-            console.log(`Animation for ${ballId} complete. Refreshing data.`);
+            // Find the result for the ball that just finished animating
+            const finishedResult = pendingResults.find(
+                (p) => p.ballId === ballId
+            );
 
-            // Refresh the user's balance and game history.
+            if (finishedResult) {
+                // Add the finished result to the top of the visible history list
+                setGameHistory((prev) => [finishedResult, ...prev]);
+                // Remove it from the pending queue
+                setPendingResults((prev) =>
+                    prev.filter((p) => p.ballId !== ballId)
+                );
+            }
+
+            // Refresh balance now that the outcome is settled
             refreshBalance();
-            refreshHistory();
 
-            // Remove the completed ball from the state.
+            // Remove the ball from the animation board
             setBalls((prev) => prev.filter((b) => b.id !== ballId));
         },
-        [refreshBalance, refreshHistory]
-    ); // Dependencies
+        [pendingResults, refreshBalance]
+    );
 
     const dropBall = useCallback(
         async (
@@ -54,6 +77,8 @@ export const usePlinkoGame = (userAddress: string) => {
                 );
 
                 if (gameResults && gameResults.length > 0) {
+                    setPendingResults((prev) => [...prev, ...gameResults]);
+
                     const firstRowPegs = 3;
                     const firstRowWidth = (firstRowPegs - 1) * SPACING;
                     const firstRowStartX = (CANVAS_WIDTH - firstRowWidth) / 2;

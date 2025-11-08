@@ -64,6 +64,21 @@ export const useContracts = (userAddress: string) => {
         }
     }, [userAddress, contractsValid]);
 
+    const getGameHistory = useCallback(
+        async (limit: number = 20) => {
+            const contractService = new ContractService(walletStrategy);
+
+            if (!userAddress || !contractsValid) return [];
+            try {
+                return await contractService.getGameHistory(userAddress, limit);
+            } catch (err: any) {
+                console.error("Error fetching history:", err);
+                return [];
+            }
+        },
+        [userAddress, contractsValid]
+    );
+
     // Auto-fetch on address change
     useEffect(() => {
         if (userAddress && contractsValid) {
@@ -139,7 +154,6 @@ export const useContracts = (userAddress: string) => {
 
                 // Extract game result from transaction events
                 const gameResult = parseMultipleGameResults(result);
-                console.log("Parsed game result:", gameResult);
 
                 return gameResult;
             } catch (err: any) {
@@ -166,7 +180,7 @@ export const useContracts = (userAddress: string) => {
 
             if (wasmEvents.length === 0) return [];
 
-            return wasmEvents.map((event: any) => {
+            return wasmEvents.map((event: any, i) => {
                 const attrs = event.attributes || [];
                 const getAttr = (key: string) =>
                     attrs.find((a: any) => a.key === key)?.value;
@@ -179,11 +193,12 @@ export const useContracts = (userAddress: string) => {
 
                 return {
                     ballId: uniqueId,
-                    betAmount: getAttr("bet_amount"),
-                    multiplier: parseFloat(getAttr("multiplier")),
-                    winAmount: getAttr("win_amount"),
-                    timestamp: Date.now(),
+                    bet_amount: getAttr("bet_amount"),
+                    multiplier: `${parseFloat(getAttr("multiplier"))}x`,
+                    win_amount: getAttr("win_amount"),
+                    timestamp: Date.parse(txResult.timestamp) / 1000,
                     path: pathString ? pathString.split("").map(Number) : [],
+                    eventIndex: i,
                 };
             });
         } catch (err) {
@@ -249,6 +264,6 @@ export const useContracts = (userAddress: string) => {
         purchasePlink,
         playGame,
         refreshBalance: fetchPlinkBalance,
-        refreshHistory: fetchGameHistory,
+        getGameHistory,
     };
 };

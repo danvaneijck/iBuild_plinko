@@ -3,6 +3,7 @@ import { History, TrendingUp, TrendingDown } from 'lucide-react';
 import { GameResult } from '../types/game';
 import { formatTokenAmount } from '../utils/format';
 import { PLINK_TOKEN_DECIMALS } from '../config/contracts';
+import { motion, AnimatePresence } from 'framer-motion'; // Import Framer Motion
 
 interface GameHistoryProps {
   history: GameResult[];
@@ -22,53 +23,53 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
             No games played yet. Start playing to see your history!
           </div>
         ) : (
-          history.sort((a, b) => b.timestamp - a.timestamp).map((result, i) => {
 
-            // ---- Step 2: Use BigInt for precise calculations ----
-            const betAmountBigInt = BigInt(result.bet_amount || '0');
-            const winAmountBigInt = BigInt(result.win_amount || '0');
-            const profitBigInt = winAmountBigInt - betAmountBigInt;
-            const isWin = winAmountBigInt > betAmountBigInt;
+          <AnimatePresence initial={false}>
+            {history.sort((a, b) => b.timestamp - a.timestamp).map((result, i) => {
+              const isWin = BigInt(result.win_amount || '0') > BigInt(result.bet_amount || '0');
+              const profitBigInt = BigInt(result.win_amount || '0') - BigInt(result.bet_amount || '0');
+              const betFormatted = formatTokenAmount(result.bet_amount, PLINK_TOKEN_DECIMALS);
+              const wonFormatted = formatTokenAmount(result.win_amount, PLINK_TOKEN_DECIMALS);
+              const profitFormatted = formatTokenAmount(
+                profitBigInt.toString().replace('-', ''),
+                PLINK_TOKEN_DECIMALS
+              );
 
-            // ---- Step 3: Format the amounts for display ----
-            const betFormatted = formatTokenAmount(result.bet_amount, PLINK_TOKEN_DECIMALS);
-            const wonFormatted = formatTokenAmount(result.win_amount, PLINK_TOKEN_DECIMALS);
-            // We format the profit separately. Need to handle its sign.
-            const profitFormatted = formatTokenAmount(
-              profitBigInt.toString().replace('-', ''), // Format the absolute value
-              PLINK_TOKEN_DECIMALS
-            );
-
-            return (
-              <div
-                key={result.timestamp + i}
-                className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {isWin ? (
-                      <TrendingUp className="text-green-500" size={20} />
-                    ) : (
-                      <TrendingDown className="text-red-500" size={20} />
-                    )}
-                    <span className="text-white font-semibold">
-                      {result.multiplier} Multiplier
+              return (
+                <motion.div
+                  key={result.ballId || result.timestamp + i} // Use a stable unique key like ballId
+                  layout
+                  initial={{ opacity: 0, y: -20, scale: 0.95 }} // Start invisible and slightly above
+                  animate={{ opacity: 1, y: 0, scale: 1 }} // Animate to fully visible and in place
+                  transition={{ duration: 0.1, ease: "easeInOut" }} // Smooth transition
+                  className="bg-gray-800 rounded-xl p-4 border border-gray-700"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {isWin ? (
+                        <TrendingUp className="text-green-500" size={20} />
+                      ) : (
+                        <TrendingDown className="text-red-500" size={20} />
+                      )}
+                      <span className="text-white font-semibold">
+                        {result.multiplier} Multiplier
+                      </span>
+                    </div>
+                    <span className={`font-bold ${isWin ? 'text-green-500' : 'text-red-500'}`}>
+                      {profitBigInt >= 0n ? '+' : '-'}{profitFormatted} $PLINK
                     </span>
                   </div>
-                  <span className={`font-bold ${isWin ? 'text-green-500' : 'text-red-500'}`}>
-                    {profitBigInt >= 0n ? '+' : '-'}{profitFormatted} $PLINK
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-400">
-                  <span>Bet: {betFormatted} $PLINK</span>
-                  <span>Won: {wonFormatted} $PLINK</span>
-                </div>
-                <div className="text-xs text-gray-600 mt-2">
-                  {new Date(result.timestamp * 1000).toLocaleString()}
-                </div>
-              </div>
-            );
-          })
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>Bet: {betFormatted} $PLINK</span>
+                    <span>Won: {wonFormatted} $PLINK</span>
+                  </div>
+                  <div className="text-xs text-gray-600 mt-2">
+                    {new Date(result.timestamp * 1000).toLocaleString()}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         )}
       </div>
     </div>

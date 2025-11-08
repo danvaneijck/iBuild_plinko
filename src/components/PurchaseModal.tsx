@@ -9,11 +9,11 @@ interface PurchaseModalProps {
   isLoading?: boolean;
 }
 
-export const PurchaseModal: React.FC<PurchaseModalProps> = ({ 
-  isOpen, 
-  onClose, 
+export const PurchaseModal: React.FC<PurchaseModalProps> = ({
+  isOpen,
+  onClose,
   onPurchase,
-  isLoading = false 
+  isLoading = false
 }) => {
   const [injAmount, setInjAmount] = useState('1');
   const [error, setError] = useState('');
@@ -38,7 +38,7 @@ export const PurchaseModal: React.FC<PurchaseModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full border border-gray-800 shadow-2xl">
+      <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full border border-gray-800 shadow-2xl animate-fade-in-scale">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
             <Coins className="text-purple-500" size={28} />
