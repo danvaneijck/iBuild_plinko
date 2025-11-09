@@ -11,8 +11,8 @@ PASSWORD="12345678"
 TREASURY_ADDRESS="inj1q2m26a7jdzjyfdn545vqsude3zwwtfrdap5jgz"
 DEPLOYER=$TREASURY_ADDRESS
 
-INITIAL_HOUSE_FUND="1000000000000000000000000"
-
+INITIAL_HOUSE_FUND="1000000000000000000000000000" # 1,000,000 tokens with 18 decimals
+DENOM_CREATION_FEE="1000000000000000000inj" # 1 INJ
 
 store_contract() {
     local wasm_file="$1"
@@ -24,13 +24,11 @@ store_contract() {
       --yes --fees="$FEES" --gas="$GAS" \
       --node="$NODE" 2>&1)
     
-    # **IMPROVED ERROR HANDLING**
     if echo "$tx_output" | grep -q 'error:'; then
         echo "❌ ERROR storing contract: $tx_output" >&2
         exit 1
     fi
       
-    # **CORRECTED REGEX**
     txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
     echo "  - Transaction hash: $txhash" >&2
     
@@ -51,33 +49,48 @@ instantiate_contract() {
     local init_msg="$2"
     local label="$3"
     local admin="${4:-}"
+    local amount="${5:-}" # <-- Add amount as an optional 5th argument
+
+    # Build the core command
+    local cmd_args=(
+        "tx" "wasm" "instantiate" "$code_id" "$init_msg"
+        "--label=$label"
+        "--from=$KEY_NAME"
+        "--chain-id=$CHAIN_ID"
+        "--yes" "--fees=$FEES" "--gas=$GAS"
+        "--node=$NODE"
+    )
+
+    # Add admin flag if provided
     if [ -z "$admin" ]; then
-        tx_output=$(yes $PASSWORD | injectived tx wasm instantiate "$code_id" "$init_msg" \
-          --label="$label" \
-          --no-admin \
-          --from="$KEY_NAME" \
-          --chain-id="$CHAIN_ID" \
-          --yes --fees="$FEES" --gas="$GAS" \
-          --node="$NODE" 2>&1)
+        cmd_args+=("--no-admin")
     else
-        tx_output=$(yes $PASSWORD | injectived tx wasm instantiate "$code_id" "$init_msg" \
-          --label="$label" \
-          --admin="$admin" \
-          --from="$KEY_NAME" \
-          --chain-id="$CHAIN_ID" \
-          --yes --fees="$FEES" --gas="$GAS" \
-          --node="$NODE" 2>&1)
+        cmd_args+=("--admin=$admin")
     fi
-    # Extract the txhash from the tx output.
+
+    # Add amount flag if provided
+    if [ -n "$amount" ]; then
+        cmd_args+=("--amount=$amount")
+    fi
+
+    tx_output=$(yes $PASSWORD | injectived "${cmd_args[@]}" 2>&1)
+
+    # (The rest of the function remains the same)
     txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
-    sleep 1
+    sleep 6 # Increased sleep to ensure tx is indexed
     query_output=$(injectived query tx "$txhash" --node="$NODE")
-    # Extract the contract address from the query output.
     contract_address=$(echo "$query_output" \
     | grep -A 1 'key: contract_address' \
     | grep 'value:' \
     | head -1 \
     | sed "s/.*value: //; s/['\"]//g")
+    
+    if [ -z "$contract_address" ]; then
+        echo "❌ ERROR: Failed to retrieve contract_address for txhash: $txhash." >&2
+        echo "Full query output: $query_output" >&2
+        exit 1
+    fi
+
     echo "$contract_address"
 }
 
@@ -99,7 +112,6 @@ execute_contract() {
         exit 1
     fi
     
-    # **CORRECTED REGEX**
     txhash=$(echo "$tx_output" | grep -o 'txhash: [A-F0-9]*' | awk '{print $2}')
     echo "  - Transaction hash: $txhash" >&2
     sleep 6
@@ -107,10 +119,9 @@ execute_contract() {
 
 
 # --- Main Deployment Logic ---
-# (This part remains the same)
 
-echo "🚀 Starting Plinko Game Deployment"
-echo "=================================="
+echo "🚀 Starting Plinko Game Deployment (Token Factory Version)"
+echo "========================================================"
 echo "Chain ID:         $CHAIN_ID"
 echo "Node:             $NODE"
 echo "Deployer Key:     $KEY_NAME"
@@ -118,61 +129,40 @@ echo "Deployer Address: $DEPLOYER"
 echo "Treasury Address: $TREASURY_ADDRESS"
 echo ""
 
-PLINK_CODE_ID=$(store_contract "artifacts/plink_token.wasm")
-echo "✅ PLINK Token Code ID: $PLINK_CODE_ID"
-echo ""
-
-INIT_PLINK=$(cat <<EOF
-{
-  "name": "Plink Token",
-  "symbol": "PLINK",
-  "decimals": 18,
-  "initial_balances": [],
-  "mint": {
-    "minter": "$DEPLOYER",
-    "cap": null
-  }
-}
-EOF
-)
-PLINK_TOKEN_ADDRESS=$(instantiate_contract "$PLINK_CODE_ID" "$INIT_PLINK" "plink-token" "$DEPLOYER")
-echo "✅ PLINK Token Address: $PLINK_TOKEN_ADDRESS"
-echo ""
-
-MINT_FOR_HOUSE_MSG="{\"mint\":{\"recipient\":\"$DEPLOYER\",\"amount\":\"$INITIAL_HOUSE_FUND\"}}"
-execute_contract "$PLINK_TOKEN_ADDRESS" "$MINT_FOR_HOUSE_MSG"
-echo "✅ Minted $INITIAL_HOUSE_FUND PLINK to deployer account"
-echo ""
-
+# 1. Store the Purchase and Game contract code
 PURCHASE_CODE_ID=$(store_contract "artifacts/purchase_contract.wasm")
 echo "✅ Purchase Contract Code ID: $PURCHASE_CODE_ID"
 echo ""
-
-INIT_PURCHASE=$(cat <<EOF
-{
-  "plink_token_address": "$PLINK_TOKEN_ADDRESS",
-  "treasury_address": "$TREASURY_ADDRESS",
-  "exchange_rate": "100"
-}
-EOF
-)
-PURCHASE_CONTRACT_ADDRESS=$(instantiate_contract "$PURCHASE_CODE_ID" "$INIT_PURCHASE" "purchase-contract" "$DEPLOYER")
-echo "✅ Purchase Contract Address: $PURCHASE_CONTRACT_ADDRESS"
-echo ""
-
-UPDATE_MINTER_MSG="{\"update_minter\":{\"new_minter\":\"$PURCHASE_CONTRACT_ADDRESS\"}}"
-execute_contract "$PLINK_TOKEN_ADDRESS" "$UPDATE_MINTER_MSG"
-echo "✅ PLINK Token minter updated to Purchase Contract"
-echo ""
-
 GAME_CODE_ID=$(store_contract "artifacts/plinko_game.wasm")
 echo "✅ Plinko Game Code ID: $GAME_CODE_ID"
 echo ""
 
+# 2. Instantiate the Purchase Contract (which creates the token)
+INIT_PURCHASE=$(cat <<EOF
+{
+  "treasury_address": "$TREASURY_ADDRESS",
+  "exchange_rate": "100",
+  "token_name": "Plink Token",
+  "token_symbol": "PLINK",
+  "token_decimals": 18,
+  "subdenom": "plink"
+}
+EOF
+)
+PURCHASE_CONTRACT_ADDRESS=$(instantiate_contract "$PURCHASE_CODE_ID" "$INIT_PURCHASE" "purchase-contract" "$DEPLOYER" "$DENOM_CREATION_FEE")
+echo "✅ Purchase Contract Address: $PURCHASE_CONTRACT_ADDRESS"
+echo ""
+
+# The token denom is now factory/{purchase_contract_address}/plink
+TOKEN_DENOM="factory/$PURCHASE_CONTRACT_ADDRESS/plink"
+echo "ℹ️  Token Denom: $TOKEN_DENOM"
+echo ""
+
+# 3. Instantiate the Game Contract
 INIT_GAME=$(cat <<EOF
 {
-  "plink_token_address": "$PLINK_TOKEN_ADDRESS",
-  "house_address": "$DEPLOYER"
+  "token_denom": "$TOKEN_DENOM",
+  "funder_address": "$PURCHASE_CONTRACT_ADDRESS"
 }
 EOF
 )
@@ -180,21 +170,25 @@ GAME_CONTRACT_ADDRESS=$(instantiate_contract "$GAME_CODE_ID" "$INIT_GAME" "plink
 echo "✅ Plinko Game Address: $GAME_CONTRACT_ADDRESS"
 echo ""
 
-INCREASE_ALLOWANCE_MSG="{\"increase_allowance\":{\"spender\":\"$GAME_CONTRACT_ADDRESS\",\"amount\":\"$INITIAL_HOUSE_FUND\"}}"
-execute_contract "$PLINK_TOKEN_ADDRESS" "$INCREASE_ALLOWANCE_MSG"
-echo "✅ Approved Plinko Game to spend $INITIAL_HOUSE_FUND PLINK"
+# 4. Fund the Game Contract (House) from the Purchase Contract
+FUND_HOUSE_MSG=$(cat <<EOF
+{
+  "fund_house": {
+    "game_contract": "$GAME_CONTRACT_ADDRESS",
+    "amount": "$INITIAL_HOUSE_FUND"
+  }
+}
+EOF
+)
+execute_contract "$PURCHASE_CONTRACT_ADDRESS" "$FUND_HOUSE_MSG"
+echo "✅ Successfully funded the Plinko Game contract with $INITIAL_HOUSE_FUND $TOKEN_DENOM"
 echo ""
 
-## ==> Step 3: Execute the FundHouse message on the Game Contract to transfer the tokens.
-FUND_HOUSE_MSG="{\"fund_house\":{\"amount\":\"$INITIAL_HOUSE_FUND\"}}"
-execute_contract "$GAME_CONTRACT_ADDRESS" "$FUND_HOUSE_MSG"
-echo "✅ Successfully funded the Plinko Game contract with $INITIAL_HOUSE_FUND PLINK"
-echo ""
 
 echo "✅ Deployment complete!"
 echo ""
 echo "📋 Summary:"
 echo "==========="
-echo "PLINK Token:       $PLINK_TOKEN_ADDRESS"
+echo "Token Denom:       $TOKEN_DENOM"
 echo "Purchase Contract: $PURCHASE_CONTRACT_ADDRESS"
 echo "Plinko Game:       $GAME_CONTRACT_ADDRESS"

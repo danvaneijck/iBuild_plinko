@@ -31,3 +31,5 @@ export interface GameResult {
     winAmount: string;
     timestamp: number;
 }
+
+export type LeaderboardType = "bestWins" | "totalWagered";

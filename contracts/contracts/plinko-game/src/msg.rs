@@ -3,8 +3,8 @@ use cosmwasm_std::{Addr, Uint128};
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    pub plink_token_address: String,
-    pub house_address: String,
+    pub token_denom: String,
+    pub funder_address: String,
 }
 
 #[cw_serde]
@@ -12,19 +12,14 @@ pub enum ExecuteMsg {
     Play {
         difficulty: Difficulty,
         risk_level: RiskLevel,
-        bet_amount: Uint128,
     },
-    UpdateHouse {
-        new_house: String,
-    },
+    /// Withdraw house winnings (admin only)
     WithdrawHouse {
         amount: Uint128,
     },
-    /// Fund the house with PLINK tokens (admin only)
-    /// Requires prior approval for the contract to transfer tokens
-    FundHouse {
-        amount: Uint128,
-    },
+    /// This message must be sent with the native tokens to be funded.
+    FundHouse {},
+    SyncBalance {},
 }
 
 #[cw_serde]
@@ -36,6 +31,18 @@ pub enum QueryMsg {
     Stats {},
     #[returns(HistoryResponse)]
     History { player: String, limit: Option<u32> },
+    #[returns(UserStatsResponse)]
+    UserStats { player: String },
+    #[returns(LeaderboardResponse)]
+    GlobalLeaderboard {
+        leaderboard_type: LeaderboardType,
+        limit: Option<u32>,
+    },
+    #[returns(LeaderboardResponse)]
+    DailyLeaderboard {
+        leaderboard_type: LeaderboardType,
+        limit: Option<u32>,
+    },
 }
 
 #[cw_serde]
@@ -53,9 +60,14 @@ pub enum RiskLevel {
 }
 
 #[cw_serde]
+pub enum LeaderboardType {
+    BestWins,     // Sorted by best single game PnL
+    TotalWagered, // Sorted by cumulative wagered amount
+}
+
+#[cw_serde]
 pub struct ConfigResponse {
-    pub plink_token_address: Addr,
-    pub house_address: Addr,
+    pub token_denom: String,
     pub admin: Addr,
 }
 
@@ -65,6 +77,29 @@ pub struct StatsResponse {
     pub total_wagered: Uint128,
     pub total_won: Uint128,
     pub house_balance: Uint128,
+}
+
+#[cw_serde]
+pub struct UserStatsResponse {
+    pub player: Addr,
+    pub total_games: u64,
+    pub total_wagered: Uint128,
+    pub total_won: Uint128,
+    pub best_win_pnl: Uint128,
+    pub best_win_multiplier: String,
+}
+
+#[cw_serde]
+pub struct LeaderboardEntry {
+    pub player: Addr,
+    pub value: Uint128,
+    pub multiplier: Option<String>, // Only for BestWins
+}
+
+#[cw_serde]
+pub struct LeaderboardResponse {
+    pub entries: Vec<LeaderboardEntry>,
+    pub leaderboard_type: LeaderboardType,
 }
 
 #[cw_serde]
@@ -80,6 +115,7 @@ pub struct GameRecord {
     pub bet_amount: Uint128,
     pub multiplier: String,
     pub win_amount: Uint128,
+    pub pnl: Uint128, // Profit/Loss (win_amount - bet_amount)
     pub timestamp: u64,
     pub path: Vec<bool>,
 }

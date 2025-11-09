@@ -11,13 +11,13 @@ interface GameHistoryProps {
 
 export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
   return (
-    <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-xl">
+    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2 mb-6">
         <History className="text-purple-500" size={24} />
-        <h2 className="text-2xl font-bold text-white">Recent Games</h2>
+        <h2 className="text-2xl font-bold text-white">Your Games</h2>
       </div>
 
-      <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+      <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
         {history.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No games played yet. Start playing to see your history!
@@ -42,9 +42,9 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
                   initial={{ opacity: 0, y: -20, scale: 0.95 }} // Start invisible and slightly above
                   animate={{ opacity: 1, y: 0, scale: 1 }} // Animate to fully visible and in place
                   transition={{ duration: 0.1, ease: "easeInOut" }} // Smooth transition
-                  className="bg-gray-800 rounded-xl p-4 border border-gray-700"
+                  className="bg-gray-900/50 rounded-xl p-4 "
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       {isWin ? (
                         <TrendingUp className="text-green-500" size={20} />

@@ -1,19 +1,25 @@
 [package]
 name = "purchase-contract"
 version = "0.1.0"
+authors = ["Your Name <you@example.com>"]
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+library = []
+
 [dependencies]
-cosmwasm-std = "1.5.0"
-cosmwasm-schema = "1.5.0"
-cw-storage-plus = "1.2.0"
-cw20 = "1.1.2"
-thiserror = "1.0"
-schemars = "0.8"
-serde = { version = "1.0", features = ["derive"] }
+cosmwasm-schema = "2.2.2"
+cosmwasm-std = "2.2.2"
+cw-storage-plus = "2.0.0"
+schemars = "0.8.16"
+serde = { version = "1.0.195", default-features = false, features = ["derive"] }
+thiserror = "1.0.56"
+ed25519-zebra = "4.1.0"
+injective-cosmwasm = "0.3.3"
+serde_json           = { version = "1.0.140" }
 
 [dev-dependencies]
-cw-multi-test = "0.16.5"
+cw-multi-test = "2.2.0"

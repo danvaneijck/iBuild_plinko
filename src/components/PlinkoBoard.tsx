@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 import { Ball } from '../types/game';
 import { ROWS_CONFIG } from '../config/multipliers';
+import { useWindowWidth } from '../hooks/useWindowWidth';
 
 // --- Physics Constants ---
 const PEG_RADIUS = 5;
@@ -44,11 +45,14 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
   const pegsRef = useRef<Matter.Body[]>([]);
 
   const rows = ROWS_CONFIG[difficulty];
+  const windowWidth = useWindowWidth();
+
 
   // --- Effect 1: One-Time Setup of the Physics World ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
 
     const engine = Matter.Engine.create({ gravity: { y: 1 } });
     const render = Matter.Render.create({
@@ -56,7 +60,7 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
       engine: engine,
       options: {
         width: 800,
-        height: rows * SPACING + BUCKET_HEIGHT + 60,
+        height: rows * SPACING + BUCKET_HEIGHT + (windowWidth < 500 ? 100 : 60),
         wireframes: false,
         background: 'transparent',
       },
@@ -210,7 +214,7 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
       Matter.Engine.clear(engine);
       render.canvas.getContext('2d')?.clearRect(0, 0, render.canvas.width, render.canvas.height);
     };
-  }, [rows, multipliers.length]);
+  }, [rows, multipliers.length, windowWidth]);
 
 
   // --- Effect 2: Dynamically Add and Remove Balls ---
@@ -288,17 +292,17 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
         className="w-full bg-gradient-to-b from-gray-900 to-gray-800 rounded-2xl border border-gray-700 shadow-2xl"
       />
       <div
-        className="absolute bottom-0 left-0 right-0 flex justify-center items-end gap-1"
+        className="absolute bottom-0 left-0 right-0 flex justify-center items-end "
         // You can adjust this padding to move the labels up or down as needed
         style={{ paddingBottom: '0px' }}
       >
         {multipliers.map((mult, idx) => (
           <div
             key={idx}
-            style={{ width: `43px` }}
-            className={`py-3  rounded-t-lg bg-gradient-to-br ${getMultiplierColor(
+            style={{ width: `40px` }}
+            className={`py-3 text-xs md:text-sm  rounded-t-lg bg-gradient-to-br ${getMultiplierColor(
               mult
-            )} text-white font-bold text-center shadow-lg`}
+            )} text-white font-bold text-center shadow-lg text-ellipsis overflow-hidden`}
           >
             {mult}x
           </div>

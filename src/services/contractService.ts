@@ -2,13 +2,11 @@ import { MsgExecuteContractCompat } from "@injectivelabs/sdk-ts";
 import { BigNumberInBase } from "@injectivelabs/utils";
 import { WalletStrategy } from "@injectivelabs/wallet-strategy";
 import { Network, getNetworkEndpoints } from "@injectivelabs/networks";
-import { ChainId } from "@injectivelabs/ts-types";
-import { CONTRACTS, NETWORK, CHAIN_ID } from "../config/contracts";
-import { Difficulty, RiskLevel } from "../types/game";
+import { CONTRACTS, NETWORK, TOKEN_DENOM } from "../config/contracts";
+import { Difficulty, LeaderboardType, RiskLevel } from "../types/game";
 import { MsgBroadcaster } from "@injectivelabs/wallet-core";
 
 const network = NETWORK === "mainnet" ? Network.Mainnet : Network.Testnet;
-const chainId = CHAIN_ID === "injective-1" ? ChainId.Mainnet : ChainId.Testnet;
 
 const endpoints = getNetworkEndpoints(network);
 
@@ -27,34 +25,49 @@ export class ContractService {
         });
     }
 
+    private async createMsgBroadcaster(): Promise<MsgBroadcaster> {
+        return new MsgBroadcaster({
+            walletStrategy: this.walletStrategy,
+            network,
+            endpoints,
+            // Simulating is crucial for getting gas estimates
+            simulateTx: true,
+            // A higher gas buffer can prevent out-of-gas errors
+            gasBufferCoefficient: 1.4,
+        });
+    }
+
     /**
      * Query PLINK token balance for an address
      */
     async getPlinkBalance(address: string): Promise<string> {
+        // We now query the native bank module
+        const url = `${endpoints.rest}/cosmos/bank/v1beta1/balances/${address}/by_denom?denom=${TOKEN_DENOM}`;
+
         try {
-            const injectiveAddress = address;
-            const queryMsg = { balance: { address: injectiveAddress } };
-
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.plinkToken
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
-            );
-
+            const response = await fetch(url);
+            if (!response.ok) {
+                // If the balance is 0, the endpoint might 404. Treat this as a zero balance.
+                if (response.status === 404 || response.status === 500) {
+                    return "0.00";
+                }
+                throw new Error(
+                    `Failed to fetch balance: ${response.statusText}`
+                );
+            }
             const data = await response.json();
 
-            const balance = data?.data?.balance || "0";
+            const balance = data?.balance?.amount || "0";
 
-            // Convert from base units (18 decimals) to display units
+            // Convert from base units (assuming 18 decimals as per your contract)
             return new BigNumberInBase(balance)
-                .dividedBy(new BigNumberInBase(10).pow(18))
+                .toWei(-18) // Efficiently divide by 10^18
                 .toFixed(2);
         } catch (error) {
-            console.error("Error fetching PLINK balance:", error);
+            console.error("Error fetching native token balance:", error);
             return "0.00";
         }
     }
-
     /**
      * Purchase PLINK tokens with INJ
      */
@@ -140,83 +153,6 @@ export class ContractService {
     }
 
     /**
-     * Approve PLINK spending for game contract
-     */
-    async approvePlinkSpending(
-        amount: string,
-        userAddress: string
-    ): Promise<any> {
-        try {
-            const injectiveAddress = userAddress;
-
-            this.msgBroadcaster = new MsgBroadcaster({
-                walletStrategy: this.walletStrategy,
-                network,
-                endpoints,
-                simulateTx: true,
-                gasBufferCoefficient: 1.2,
-            });
-
-            // Convert amount to base units
-            const baseAmount = new BigNumberInBase(amount)
-                .times(new BigNumberInBase(10).pow(18))
-                .toFixed(0);
-
-            const msg = MsgExecuteContractCompat.fromJSON({
-                contractAddress: CONTRACTS.plinkToken,
-                sender: injectiveAddress,
-                msg: {
-                    increase_allowance: {
-                        spender: CONTRACTS.game,
-                        amount: baseAmount,
-                    },
-                },
-            });
-
-            const result = await this.msgBroadcaster.broadcast({
-                msgs: msg,
-                injectiveAddress,
-            });
-
-            return result;
-        } catch (error) {
-            console.error("Error approving PLINK spending:", error);
-            throw error;
-        }
-    }
-
-    /**
-     * Check PLINK allowance for game contract
-     */
-    async getPlinkAllowance(userAddress: string): Promise<string> {
-        try {
-            const injectiveAddress = userAddress;
-            const queryMsg = {
-                allowance: {
-                    owner: injectiveAddress,
-                    spender: CONTRACTS.game,
-                },
-            };
-
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.plinkToken
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
-            );
-
-            const data = await response.json();
-            const allowance = data?.data?.allowance || "0";
-
-            return new BigNumberInBase(allowance)
-                .dividedBy(new BigNumberInBase(10).pow(18))
-                .toFixed(2);
-        } catch (error) {
-            console.error("Error fetching PLINK allowance:", error);
-            return "0.00";
-        }
-    }
-
-    /**
      * Play the Plinko game
      */
     async playGame(
@@ -226,75 +162,60 @@ export class ContractService {
         numberOfPlays: number,
         userAddress: string
     ): Promise<any> {
+        const msgBroadcaster = await this.createMsgBroadcaster();
+
+        // Amount for a single play in base units
+        const singleBetBaseAmount = new BigNumberInBase(betAmount)
+            .toWei(18) // Convert to 18 decimals
+            .toFixed(0);
+
+        const messages: MsgExecuteContractCompat[] = [];
+
+        // Create a 'play' message for each ball drop
+        for (let i = 0; i < numberOfPlays; i++) {
+            const playMsg = MsgExecuteContractCompat.fromJSON({
+                contractAddress: CONTRACTS.game,
+                sender: userAddress,
+                msg: {
+                    play: {
+                        difficulty: this.mapDifficulty(difficulty),
+                        risk_level: this.mapRiskLevel(riskLevel),
+                    },
+                },
+                // Attach the native tokens for this single play
+                funds: {
+                    denom: TOKEN_DENOM,
+                    amount: singleBetBaseAmount,
+                },
+            });
+            messages.push(playMsg);
+        }
+
+        // Broadcast the single transaction with all play messages
+        const result = await msgBroadcaster.broadcast({
+            msgs: messages,
+            injectiveAddress: userAddress,
+        });
+
+        return result;
+    }
+
+    /**
+     * [NEW] Query statistics for a specific user
+     */
+    async getUserStats(userAddress: string): Promise<any> {
+        const queryMsg = { user_stats: { player: userAddress } };
+        const url = `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
+            CONTRACTS.game
+        }/smart/${btoa(JSON.stringify(queryMsg))}`;
+
         try {
-            const injectiveAddress = userAddress;
-
-            this.msgBroadcaster = new MsgBroadcaster({
-                walletStrategy: this.walletStrategy,
-                network,
-                endpoints,
-                simulateTx: true,
-                gasBufferCoefficient: 1.2,
-            });
-
-            const singleBetBaseAmount = new BigNumberInBase(betAmount).times(
-                new BigNumberInBase(10).pow(18)
-            );
-
-            const totalBetAmount = new BigNumberInBase(betAmount).times(
-                numberOfPlays
-            );
-            const totalBetBaseAmount = singleBetBaseAmount
-                .times(numberOfPlays)
-                .toFixed(0);
-
-            // This array will hold all messages for our single transaction
-            const messages: MsgExecuteContractCompat[] = [];
-
-            // Step 1: Check the current PLINK allowance
-            const allowance = await this.getPlinkAllowance(userAddress);
-
-            // Step 2: If allowance is less than the total required, add an approval message
-            if (new BigNumberInBase(allowance).lt(totalBetAmount)) {
-                const approvalMsg = MsgExecuteContractCompat.fromJSON({
-                    contractAddress: CONTRACTS.plinkToken,
-                    sender: injectiveAddress,
-                    msg: {
-                        increase_allowance: {
-                            spender: CONTRACTS.game,
-                            amount: totalBetBaseAmount, // Approve the total amount
-                        },
-                    },
-                });
-                messages.push(approvalMsg);
-            }
-
-            // Step 3: Create and add a 'play' message for each ball
-            for (let i = 0; i < numberOfPlays; i++) {
-                const playMsg = MsgExecuteContractCompat.fromJSON({
-                    contractAddress: CONTRACTS.game,
-                    sender: injectiveAddress,
-                    msg: {
-                        play: {
-                            difficulty: this.mapDifficulty(difficulty),
-                            risk_level: this.mapRiskLevel(riskLevel),
-                            bet_amount: singleBetBaseAmount.toFixed(0),
-                        },
-                    },
-                });
-                messages.push(playMsg);
-            }
-
-            // Step 4: Broadcast the single transaction with all messages
-            const result = await this.msgBroadcaster.broadcast({
-                msgs: messages,
-                injectiveAddress,
-            });
-
-            return result;
+            const response = await fetch(url);
+            const data = await response.json();
+            return data?.data || {}; // Return empty object on failure
         } catch (error) {
-            console.error("Error playing game:", error);
-            throw error;
+            console.error("Error fetching user stats:", error);
+            return {};
         }
     }
 
@@ -387,5 +308,67 @@ export class ContractService {
             high: "high",
         };
         return map[riskLevel];
+    }
+
+    /**
+     * [NEW] Query the global leaderboard
+     */
+    async getGlobalLeaderboard(
+        leaderboardType: LeaderboardType,
+        limit: number = 10
+    ): Promise<any[]> {
+        const queryMsg = {
+            global_leaderboard: {
+                leaderboard_type: this.mapLeaderboardType(leaderboardType),
+                limit,
+            },
+        };
+        const url = `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
+            CONTRACTS.game
+        }/smart/${btoa(JSON.stringify(queryMsg))}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            return data?.data?.entries || [];
+        } catch (error) {
+            console.error("Error fetching global leaderboard:", error);
+            return [];
+        }
+    }
+
+    /**
+     * [NEW] Query the daily leaderboard
+     */
+    async getDailyLeaderboard(
+        leaderboardType: LeaderboardType,
+        limit: number = 10
+    ): Promise<any[]> {
+        const queryMsg = {
+            daily_leaderboard: {
+                leaderboard_type: this.mapLeaderboardType(leaderboardType),
+                limit,
+            },
+        };
+        const url = `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
+            CONTRACTS.game
+        }/smart/${btoa(JSON.stringify(queryMsg))}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            return data?.data?.entries || [];
+        } catch (error) {
+            console.error("Error fetching daily leaderboard:", error);
+            return [];
+        }
+    }
+
+    // Helper to map frontend type to contract's expected enum format
+    private mapLeaderboardType(leaderboardType: LeaderboardType): string {
+        if (leaderboardType === "bestWins") {
+            return "best_wins";
+        }
+        return "total_wagered";
     }
 }
