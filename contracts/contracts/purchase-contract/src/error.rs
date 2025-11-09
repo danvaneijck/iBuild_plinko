@@ -18,6 +18,9 @@ pub enum ContractError {
     #[error("Invalid exchange rate")]
     InvalidExchangeRate {},
 
+    #[error("Invalid amount")]
+    InvalidAmount {},
+
     #[error("Overflow in calculation")]
     OverflowError {},
 }

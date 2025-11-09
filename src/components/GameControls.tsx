@@ -26,6 +26,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
   const [numberOfBalls, setNumberOfBalls] = useState(1);
 
   const handlePlayClick = () => {
+
     if (!disabled && !isLoading) {
       onPlay(betAmount, numberOfBalls); // Call onPlay once
     }
@@ -82,7 +83,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
             onChange={(e) => setNumberOfBalls(parseInt(e.target.value, 10))}
             className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
             placeholder="Enter number of balls"
-            min="1"
+            min={1}
+            max={20}
             disabled={disabled || isLoading}
           />
         </div>

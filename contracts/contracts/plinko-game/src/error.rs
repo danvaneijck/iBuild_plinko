@@ -23,4 +23,10 @@ pub enum ContractError {
 
     #[error("Invalid multiplier index")]
     InvalidMultiplierIndex {},
+
+    #[error("Invalid funds sent")]
+    NoFundsSent {},
+
+    #[error("Insufficient house balance to pay out winnings")]
+    InsufficientHouseBalance {},
 }

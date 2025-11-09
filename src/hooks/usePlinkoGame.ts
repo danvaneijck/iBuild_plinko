@@ -4,7 +4,7 @@ import { useContracts } from "./useContracts";
 
 const CANVAS_WIDTH = 800;
 const SPACING = 45;
-const BALL_DROP_DELAY_MS = 200; // 200ms delay between ball drops
+const BALL_DROP_DELAY_MS = 500; // 200ms delay between ball drops
 
 export const usePlinkoGame = (userAddress: string) => {
     const [balls, setBalls] = useState<Ball[]>([]);
@@ -104,6 +104,7 @@ export const usePlinkoGame = (userAddress: string) => {
                 }
             } catch (err: any) {
                 console.error("Drop ball failed:", err);
+
                 throw err;
             }
         },

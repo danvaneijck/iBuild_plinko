@@ -131,12 +131,28 @@ export const useContracts = (userAddress: string) => {
         ) => {
             const contractService = new ContractService(walletStrategy);
             if (!userAddress || !contractsValid) {
+                setError("Wallet not connected or contracts not configured");
+
                 throw new Error(
                     "Wallet not connected or contracts not configured"
                 );
             }
 
+            if (numberOfBalls < 1 || numberOfBalls > 20) {
+                setError("Number of balls must be between 1 and 20");
+                return;
+            }
+
             if (parseFloat(betAmount) > parseFloat(plinkBalance)) {
+                setError("Insufficient PLINK balance");
+                throw new Error("Insufficient PLINK balance");
+            }
+
+            if (
+                parseFloat(betAmount) * numberOfBalls >
+                parseFloat(plinkBalance)
+            ) {
+                setError("Insufficient PLINK balance");
                 throw new Error("Insufficient PLINK balance");
             }
 
@@ -152,7 +168,6 @@ export const useContracts = (userAddress: string) => {
                     userAddress
                 );
 
-                // Extract game result from transaction events
                 const gameResult = parseMultipleGameResults(result);
 
                 return gameResult;

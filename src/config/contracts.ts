@@ -8,11 +8,13 @@ export const REST_URL =
     "https://testnet.sentry.lcd.injective.network:443";
 
 export const CONTRACTS = {
-    plinkToken: import.meta.env.VITE_PLINK_TOKEN_ADDRESS,
     purchase: import.meta.env.VITE_PURCHASE_CONTRACT_ADDRESS || "",
     game: import.meta.env.VITE_GAME_CONTRACT_ADDRESS || "",
     treasury: import.meta.env.VITE_TREASURY_ADDRESS || "",
 };
+
+export const TOKEN_SUBDENOM = "plink";
+export const TOKEN_DENOM = `factory/${CONTRACTS.purchase}/${TOKEN_SUBDENOM}`;
 
 export const EXCHANGE_RATE = parseInt(
     import.meta.env.VITE_EXCHANGE_RATE || "100"
