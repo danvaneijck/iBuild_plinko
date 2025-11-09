@@ -42,7 +42,7 @@ export const useContracts = (userAddress: string) => {
 
         try {
             const balance = await contractService.getPlinkBalance(userAddress);
-            setPlinkBalance(balance);
+            if (balance) setPlinkBalance(balance);
         } catch (err: any) {
             console.error("Error fetching balance:", err);
             setError(err.message || "Failed to fetch balance");
