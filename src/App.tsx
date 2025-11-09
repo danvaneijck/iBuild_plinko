@@ -169,6 +169,7 @@ function App() {
                 balls={balls}
                 difficulty={difficulty}
                 multipliers={multipliers}
+                gameHistory={[...gameHistory.sort((a, b) => (b.timestamp - a.timestamp) || ((a.eventIndex ?? 0) - (b.eventIndex ?? 0)))]}
                 onAnimationComplete={onAnimationComplete}
               />
               <div className='flex justify-center mt-4 w-full gap-2'>
@@ -183,7 +184,6 @@ function App() {
                   </svg>
                 </a>
               </div>
-
             </div>
 
             {/* --- Mobile & Desktop Right Column: Stats & Info --- */}
@@ -194,7 +194,7 @@ function App() {
               {/* --- Game History for Mobile --- */}
               {gameHistory && gameHistory.length > 0 &&
                 <div className="lg:hidden">
-                  <GameHistory history={gameHistory} />
+                  <GameHistory history={[...gameHistory.sort((a, b) => (b.timestamp - a.timestamp) || ((a.eventIndex ?? 0) - (b.eventIndex ?? 0)))]} />
                 </div>
               }
               <Leaderboard />

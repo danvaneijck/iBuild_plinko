@@ -97,6 +97,7 @@ export const usePlinkoGame = (userAddress: string) => {
                                 vy: 0,
                                 currentRow: -1,
                                 pegIndex: centerPegIndex,
+                                eventIndex: result.eventIndex,
                             };
                             setBalls((prev) => [...prev, newBall]);
                         }, index * BALL_DROP_DELAY_MS); // Stagger the animation
