@@ -25,7 +25,7 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
         ) : (
 
           <AnimatePresence initial={false}>
-            {history.sort((a, b) => b.timestamp - a.timestamp).map((result, i) => {
+            {history.map((result, i) => {
               const isWin = BigInt(result.win_amount || '0') > BigInt(result.bet_amount || '0');
               const profitBigInt = BigInt(result.win_amount || '0') - BigInt(result.bet_amount || '0');
               const betFormatted = formatTokenAmount(result.bet_amount, PLINK_TOKEN_DECIMALS);
