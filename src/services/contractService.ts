@@ -1,4 +1,8 @@
-import { MsgExecuteContractCompat } from "@injectivelabs/sdk-ts";
+import {
+    ChainGrpcBankApi,
+    ChainGrpcWasmApi,
+    MsgExecuteContractCompat,
+} from "@injectivelabs/sdk-ts";
 import { BigNumberInBase } from "@injectivelabs/utils";
 import { WalletStrategy } from "@injectivelabs/wallet-strategy";
 import { Network, getNetworkEndpoints } from "@injectivelabs/networks";
@@ -13,6 +17,8 @@ const endpoints = getNetworkEndpoints(network);
 export class ContractService {
     private walletStrategy: WalletStrategy;
     private msgBroadcaster: MsgBroadcaster;
+    private client: ChainGrpcWasmApi;
+    bankClient: ChainGrpcBankApi;
 
     constructor(walletStrategy: WalletStrategy) {
         this.walletStrategy = walletStrategy;
@@ -23,6 +29,9 @@ export class ContractService {
             simulateTx: true,
             gasBufferCoefficient: 1.2,
         });
+
+        this.client = new ChainGrpcWasmApi(endpoints.grpc);
+        this.bankClient = new ChainGrpcBankApi(endpoints.grpc);
     }
 
     private async createMsgBroadcaster(): Promise<MsgBroadcaster> {
@@ -40,24 +49,14 @@ export class ContractService {
     /**
      * Query PLINK token balance for an address
      */
-    async getPlinkBalance(address: string): Promise<string> {
-        // We now query the native bank module
-        const url = `${endpoints.rest}/cosmos/bank/v1beta1/balances/${address}/by_denom?denom=${TOKEN_DENOM}`;
-
+    async getPlinkBalance(address: string): Promise<string | null> {
         try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                // If the balance is 0, the endpoint might 404. Treat this as a zero balance.
-                if (response.status === 404 || response.status === 500) {
-                    return "0.00";
-                }
-                throw new Error(
-                    `Failed to fetch balance: ${response.statusText}`
-                );
-            }
-            const data = await response.json();
+            const data = await this.bankClient.fetchBalance({
+                accountAddress: address,
+                denom: TOKEN_DENOM,
+            });
 
-            const balance = data?.balance?.amount || "0";
+            const balance = data?.amount || "0";
 
             // Convert from base units (assuming 18 decimals as per your contract)
             return new BigNumberInBase(balance)
@@ -65,7 +64,7 @@ export class ContractService {
                 .toFixed(2);
         } catch (error) {
             console.error("Error fetching native token balance:", error);
-            return "0.00";
+            return null;
         }
     }
     /**
@@ -115,16 +114,13 @@ export class ContractService {
      */
     async getPurchaseConfig(): Promise<any> {
         try {
-            const queryMsg = { config: {} };
-
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.purchase
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
+            const query = btoa(JSON.stringify({ config: {} }));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.purchase,
+                query
             );
-
-            const data = await response.json();
-            return data?.data;
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded;
         } catch (error) {
             console.error("Error fetching purchase config:", error);
             return null;
@@ -136,16 +132,13 @@ export class ContractService {
      */
     async getPurchaseStats(): Promise<any> {
         try {
-            const queryMsg = { stats: {} };
-
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.purchase
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
+            const query = btoa(JSON.stringify({ stats: {} }));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.purchase,
+                query
             );
-
-            const data = await response.json();
-            return data?.data;
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded;
         } catch (error) {
             console.error("Error fetching purchase stats:", error);
             return null;
@@ -204,15 +197,16 @@ export class ContractService {
      * [NEW] Query statistics for a specific user
      */
     async getUserStats(userAddress: string): Promise<any> {
-        const queryMsg = { user_stats: { player: userAddress } };
-        const url = `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-            CONTRACTS.game
-        }/smart/${btoa(JSON.stringify(queryMsg))}`;
-
         try {
-            const response = await fetch(url);
-            const data = await response.json();
-            return data?.data || {}; // Return empty object on failure
+            const query = btoa(
+                JSON.stringify({ user_stats: { player: userAddress } })
+            );
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.game,
+                query
+            );
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded;
         } catch (error) {
             console.error("Error fetching user stats:", error);
             return {};
@@ -224,16 +218,13 @@ export class ContractService {
      */
     async getGameStats(): Promise<any> {
         try {
-            const queryMsg = { stats: {} };
-
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.game
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
+            const query = btoa(JSON.stringify({ stats: {} }));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.game,
+                query
             );
-
-            const data = await response.json();
-            return data?.data;
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded;
         } catch (error) {
             console.error("Error fetching game stats:", error);
             return null;
@@ -256,14 +247,13 @@ export class ContractService {
                 },
             };
 
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.game
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
+            const query = btoa(JSON.stringify(queryMsg));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.game,
+                query
             );
-
-            const data = await response.json();
-            return data?.data?.games || [];
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded.games;
         } catch (error) {
             console.error("Error fetching game history:", error);
             return [];
@@ -277,14 +267,13 @@ export class ContractService {
         try {
             const queryMsg = { config: {} };
 
-            const response = await fetch(
-                `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-                    CONTRACTS.game
-                }/smart/${btoa(JSON.stringify(queryMsg))}`
+            const query = btoa(JSON.stringify(queryMsg));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.game,
+                query
             );
-
-            const data = await response.json();
-            return data?.data;
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded;
         } catch (error) {
             console.error("Error fetching game config:", error);
             return null;
@@ -323,14 +312,15 @@ export class ContractService {
                 limit,
             },
         };
-        const url = `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-            CONTRACTS.game
-        }/smart/${btoa(JSON.stringify(queryMsg))}`;
 
         try {
-            const response = await fetch(url);
-            const data = await response.json();
-            return data?.data?.entries || [];
+            const query = btoa(JSON.stringify(queryMsg));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.game,
+                query
+            );
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded.entries || [];
         } catch (error) {
             console.error("Error fetching global leaderboard:", error);
             return [];
@@ -350,14 +340,15 @@ export class ContractService {
                 limit,
             },
         };
-        const url = `${endpoints.rest}/cosmwasm/wasm/v1/contract/${
-            CONTRACTS.game
-        }/smart/${btoa(JSON.stringify(queryMsg))}`;
 
         try {
-            const response = await fetch(url);
-            const data = await response.json();
-            return data?.data?.entries || [];
+            const query = btoa(JSON.stringify(queryMsg));
+            const info = await this.client.fetchSmartContractState(
+                CONTRACTS.game,
+                query
+            );
+            const decoded = JSON.parse(new TextDecoder().decode(info.data));
+            return decoded.entries || [];
         } catch (error) {
             console.error("Error fetching daily leaderboard:", error);
             return [];

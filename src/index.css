@@ -1,3 +1,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.ibuild-badge-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #fff;
+  font-family: sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.3s;
+}
+
+.ibuild-badge-dark:hover {
+  background-color: #2a2a2a;
+}
+
+.ibuild-badge-dark img {
+  height: 22px;
+}
+
+.inj-badge-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #fff; /* This color applies to the text AND the SVG */
+  font-family: sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.3s;
+}
+
+.inj-badge-dark:hover {
+  background-color: #2a2a2a;
+}
+

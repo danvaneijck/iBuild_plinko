@@ -49,7 +49,7 @@ export const usePlinkoGame = (userAddress: string) => {
             }
 
             // Refresh balance now that the outcome is settled
-            refreshBalance();
+            if (finishedResult && pendingResults.length === 1) refreshBalance();
 
             // Remove the ball from the animation board
             setBalls((prev) => prev.filter((b) => b.id !== ballId));

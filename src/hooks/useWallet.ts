@@ -78,7 +78,6 @@ export const useWallet = () => {
         const savedAddress = localStorage.getItem("walletAddress");
 
         if (savedWallet && savedAddress) {
-            console.log("Auto-reconnecting to saved wallet");
             setAddress(savedAddress);
             setSelectedWallet(savedWallet);
             walletStrategy.setWallet(savedWallet);
