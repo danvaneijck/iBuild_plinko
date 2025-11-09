@@ -12,6 +12,8 @@ import { MULTIPLIERS } from './config/multipliers';
 import { Leaderboard } from './components/Leaderboard';
 import { UserStatsPanel } from './components/UserStatsPanel';
 import { GameStatsPanel } from './components/GameStatsPanel';
+import { NETWORK } from './config/contracts';
+import NetworkDisplay from './components/NetworkDisplay';
 
 function App() {
   const { address, injectiveAddress, isConnecting, error: walletError, connect, disconnect, isConnected } = useWallet();
@@ -94,6 +96,7 @@ function App() {
                 <h1 className="text-2xl font-bold">$PLINK</h1>
                 <p className="text-sm text-gray-400">Provably Fair Plinko on Injective</p>
               </div>
+              <NetworkDisplay network={NETWORK} />
 
             </div>
             <div className="flex items-center gap-4">

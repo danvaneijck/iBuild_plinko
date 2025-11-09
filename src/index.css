@@ -46,3 +46,35 @@
   background-color: #2a2a2a;
 }
 
+.network-display {
+display: inline-flex;
+align-items: center;
+padding: 6px 12px;
+background-color: #1a1a1a;
+border: 1px solid #333;
+border-radius: 9999px; /* Pill shape */
+color: #e0e0e0;
+font-family: sans-serif;
+font-size: 13px;
+font-weight: 500;
+}
+.network-status-dot {
+width: 8px;
+height: 8px;
+border-radius: 50%;
+margin-right: 8px;
+}
+.network-name {
+line-height: 1; /* Ensures text is vertically centered */
+}
+
+
+.network-display.network-mainnet .network-status-dot {
+background-color: #28a745;
+box-shadow: 0 0 5px #28a745;
+}
+
+.network-display.network-testnet .network-status-dot {
+background-color: #ffc107; 
+box-shadow: 0 0 5px #ffc107;
+}
