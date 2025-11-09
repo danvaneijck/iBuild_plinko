@@ -42,7 +42,7 @@ export const Wallet: React.FC<WalletProps> = ({
     };
 
     return (
-        <>
+        <div className='text-xs md:text-sm'>
             {!isConnected ? (
                 <button
                     onClick={() => setShowModal(true)}
@@ -55,7 +55,7 @@ export const Wallet: React.FC<WalletProps> = ({
             ) : (
                 <div className="flex items-center gap-3">
                     <div className="px-4 py-2 bg-gray-800 rounded-lg border border-gray-700">
-                        <span className="text-sm text-gray-400">Connected:</span>
+                        <span className="text-sm text-gray-400"></span>
                         <span className="ml-2 text-white font-mono">{formatAddress(address)}</span>
                     </div>
                     <button
@@ -107,6 +107,6 @@ export const Wallet: React.FC<WalletProps> = ({
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 };
