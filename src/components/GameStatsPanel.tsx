@@ -39,9 +39,11 @@ export const GameStatsPanel = () => {
         </div>
     );
 
-    if (isLoading && !stats.total_games) {
+    if (isLoading && !stats) {
         return <div className="text-center p-4 text-gray-500">Loading Game Stats...</div>;
     }
+
+    if (!stats) return
 
     return (
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">

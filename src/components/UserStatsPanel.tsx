@@ -53,6 +53,8 @@ export const UserStatsPanel = () => {
         return <div className="text-center p-4 text-gray-500">Loading Your Stats...</div>;
     }
 
+    if (!stats) return
+
     return (
         <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
             <h3 className="text-base font-bold text-white mb-2">Your Stats</h3>
