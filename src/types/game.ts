@@ -27,7 +27,7 @@ export interface Ball {
 export interface GameResult {
     ballId: string;
     betAmount: string;
-    multiplier: number;
+    multiplier: string;
     winAmount: string;
     timestamp: number;
 }

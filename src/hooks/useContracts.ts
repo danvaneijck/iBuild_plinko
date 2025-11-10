@@ -70,7 +70,13 @@ export const useContracts = (userAddress: string) => {
 
             if (!userAddress || !contractsValid) return [];
             try {
-                return await contractService.getGameHistory(userAddress, limit);
+                const historyFromContract =
+                    await contractService.getGameHistory(userAddress, limit);
+                return historyFromContract.map((game, index) => ({
+                    ...game,
+
+                    ballId: game.ballId || `hist-${game.timestamp}-${index}`,
+                }));
             } catch (err: any) {
                 console.error("Error fetching history:", err);
                 return [];
@@ -138,8 +144,8 @@ export const useContracts = (userAddress: string) => {
                 );
             }
 
-            if (numberOfBalls < 1 || numberOfBalls > 20) {
-                setError("Number of balls must be between 1 and 20");
+            if (numberOfBalls < 1 || numberOfBalls > 50) {
+                setError("Number of balls must be between 1 and 50");
                 return;
             }
 

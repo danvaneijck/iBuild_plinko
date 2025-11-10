@@ -13,8 +13,7 @@ use crate::msg::{
 use crate::multipliers::{get_multipliers, get_rows};
 use crate::rng::{calculate_bucket_index, generate_ball_path};
 use crate::state::{
-    Config, DailyLeaderboard, Stats, UserStats, CONFIG, DAILY_LEADERBOARD, DAILY_PLAYER_STATS,
-    GAME_HISTORY, GLOBAL_BEST_WINS, GLOBAL_TOTAL_WAGERED, PLAYER_GAME_COUNT, STATS, USER_STATS,
+    CONFIG, Config, DAILY_LEADERBOARD, DAILY_PLAYER_STATS, DailyLeaderboard, DailyPlayerStats, GAME_HISTORY, GLOBAL_BEST_WINS, GLOBAL_TOTAL_WAGERED, PLAYER_GAME_COUNT, STATS, Stats, USER_STATS, UserStats
 };
 
 #[entry_point]
@@ -195,21 +194,24 @@ fn execute_play(
 
     // Update daily leaderboard (with reset check)
     let mut daily = DAILY_LEADERBOARD.load(deps.storage)?;
+    let is_new_day = should_reset_daily(daily.last_reset, env.block.time.seconds());
 
-    // Check if the daily cycle needs to be reset.
-    if should_reset_daily(daily.last_reset, env.block.time.seconds()) {
+    if is_new_day {
         daily.last_reset = env.block.time.seconds();
         daily.entries_best_wins = vec![];
         daily.entries_wagered = vec![];
-        // NOTE: We don't need to manually clear DAILY_PLAYER_STATS.
-        // The old data becomes irrelevant, and players will create new entries
-        // on their first play of the new day.
     }
 
-    // Load the player's current daily stats, or create new ones if it's their first game of the day.
-    let mut player_daily_stats = DAILY_PLAYER_STATS
-        .may_load(deps.storage, &info.sender)?
-        .unwrap_or_default();
+    // Load the player's current daily stats, or create new ones if it's their first game of the new day.
+    let mut player_daily_stats = if is_new_day {
+        // If it's a new day, do not load old stats. Start with a fresh default.
+        DailyPlayerStats::default()
+    } else {
+        // Otherwise, load existing stats for the current day.
+        DAILY_PLAYER_STATS
+            .may_load(deps.storage, &info.sender)?
+            .unwrap_or_default()
+    };
 
     // Update the player's cumulative daily wagered amount.
     player_daily_stats.total_wagered = player_daily_stats.total_wagered.checked_add(bet_amount)?;
@@ -228,7 +230,7 @@ fn execute_play(
         &mut daily.entries_best_wins,
         info.sender.clone(),
         player_daily_stats.best_win_pnl, // Use cumulative best PNL for the day
-        Some(player_daily_stats.best_win_multiplier),
+        Some(player_daily_stats.best_win_multiplier.clone()),
     );
     update_leaderboard(
         &mut daily.entries_wagered,

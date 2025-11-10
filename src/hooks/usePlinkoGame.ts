@@ -4,7 +4,8 @@ import { useContracts } from "./useContracts";
 
 const CANVAS_WIDTH = 800;
 const SPACING = 45;
-const BALL_DROP_DELAY_MS = 500; // 200ms delay between ball drops
+const MIN_DELAY_MS = 200; // The fastest possible time between ball drops
+const MAX_DELAY_MS = 500; // The slowest possible time between ball drops
 
 export const usePlinkoGame = (userAddress: string) => {
     const [balls, setBalls] = useState<Ball[]>([]);
@@ -26,7 +27,10 @@ export const usePlinkoGame = (userAddress: string) => {
         const fetchInitialHistory = async () => {
             if (userAddress && contractsValid) {
                 const history = await getGameHistory(20);
-                setGameHistory(history);
+                const sortedHistory = history.sort(
+                    (a, b) => b.timestamp - a.timestamp
+                );
+                setGameHistory(sortedHistory);
             }
         };
         fetchInitialHistory();
@@ -34,22 +38,32 @@ export const usePlinkoGame = (userAddress: string) => {
 
     const handleAnimationComplete = useCallback(
         (ballId: string) => {
-            // Find the result for the ball that just finished animating
-            const finishedResult = pendingResults.find(
-                (p) => p.ballId === ballId
-            );
+            let finishedResult: GameResult | undefined;
 
-            if (finishedResult) {
-                // Add the finished result to the top of the visible history list
-                setGameHistory((prev) => [finishedResult, ...prev]);
-                // Remove it from the pending queue
-                setPendingResults((prev) =>
-                    prev.filter((p) => p.ballId !== ballId)
+            // Use the functional update form to get the most recent state
+            setPendingResults((currentPendingResults) => {
+                finishedResult = currentPendingResults.find(
+                    (p) => p.ballId === ballId
                 );
+
+                if (currentPendingResults.length === 1 && finishedResult) {
+                    refreshBalance();
+                }
+
+                return currentPendingResults.filter((p) => p.ballId !== ballId);
+            });
+
+            const result = pendingResults.find((p) => p.ballId === ballId);
+            if (result) {
+                setGameHistory((prev) => [result, ...prev]);
             }
 
-            // Refresh balance now that the outcome is settled
-            if (finishedResult && pendingResults.length === 1) refreshBalance();
+            setPendingResults((currentPending) => {
+                if (currentPending.length === 1) {
+                    refreshBalance();
+                }
+                return currentPending.filter((p) => p.ballId !== ballId);
+            });
 
             // Remove the ball from the animation board
             setBalls((prev) => prev.filter((b) => b.id !== ballId));
@@ -85,8 +99,13 @@ export const usePlinkoGame = (userAddress: string) => {
                     const centerPegIndex = Math.floor(firstRowPegs / 2);
                     const startX = firstRowStartX + centerPegIndex * SPACING;
 
-                    // Loop through results and add each ball to the state with a delay
-                    gameResults.forEach((result, index) => {
+                    // This variable will track the total delay for the next ball.
+                    let cumulativeDelay = 0;
+
+                    // Loop through results and add each ball to the state with a random delay
+                    gameResults.forEach((result) => {
+                        // Schedule the creation of the current ball using the current cumulative delay.
+                        // For the first ball, this will be 0, so it drops instantly.
                         setTimeout(() => {
                             const newBall: Ball = {
                                 id: result.ballId,
@@ -100,7 +119,13 @@ export const usePlinkoGame = (userAddress: string) => {
                                 eventIndex: result.eventIndex,
                             };
                             setBalls((prev) => [...prev, newBall]);
-                        }, index * BALL_DROP_DELAY_MS); // Stagger the animation
+                        }, cumulativeDelay);
+
+                        // Then, calculate a random interval for the *next* ball and add it to the total.
+                        const randomInterval =
+                            MIN_DELAY_MS +
+                            Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
+                        cumulativeDelay += randomInterval;
                     });
                 }
             } catch (err: any) {

@@ -42,7 +42,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
     }`;
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 space-y-6 shadow-xl">
+    <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 space-y-6 shadow-xl fade-in">
       <div>
         <label className="text-sm font-medium text-gray-400">Bet Amount</label>
         <div className="mt-2 flex">
