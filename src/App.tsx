@@ -17,6 +17,12 @@ import NetworkDisplay from './components/NetworkDisplay';
 
 function App() {
   const { address, injectiveAddress, isConnecting, error: walletError, connect, disconnect, isConnected } = useWallet();
+
+  // --- Add state for game settings ---
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [riskLevel, setRiskLevel] = useState<RiskLevel>('medium');
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+
   const {
     balls,
     gameHistory,
@@ -28,13 +34,7 @@ function App() {
     purchasePlink,
     refreshBalance,
     onAnimationComplete
-  } = usePlinkoGame(address);
-
-
-  // --- Add state for game settings ---
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [riskLevel, setRiskLevel] = useState<RiskLevel>('medium');
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  } = usePlinkoGame(address, difficulty, riskLevel);
 
   // --- Derive multipliers from state ---
   const multipliers = MULTIPLIERS[difficulty][riskLevel];
