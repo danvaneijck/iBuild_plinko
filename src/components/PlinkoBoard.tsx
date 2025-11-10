@@ -83,12 +83,12 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
   };
 
   useEffect(() => {
-    audioRef.current = new Audio('/plinko-[AudioTrimmer.com].mp3'); // Path relative to the public folder
+    audioRef.current = new Audio('/plink3.mp3'); // Path relative to the public folder
   }, []);
 
   useEffect(() => {
     // Initialize the audio pool
-    audioPoolRef.current = Array.from({ length: AUDIO_POOL_SIZE }, () => new Audio('/plinko-[AudioTrimmer.com].mp3'));
+    audioPoolRef.current = Array.from({ length: AUDIO_POOL_SIZE }, () => new Audio('/plink3.mp3'));
   }, []);
 
   useEffect(() => {
