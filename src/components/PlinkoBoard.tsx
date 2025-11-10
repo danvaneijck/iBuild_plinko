@@ -400,7 +400,12 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
 
       <div
         ref={historyContainerRef}
-        className="absolute top-4 left-4 flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide"
+        className={`
+          absolute top-4 left-4 bottom-52
+          flex flex-col gap-2
+          overflow-y-auto pr-2 scrollbar-hide
+          [mask-image:linear-gradient(to_bottom,black_80%,transparent_100%)]
+        `}
       >
         <AnimatePresence>
           {gameHistory.slice(0, 20).map((game) => (
@@ -412,8 +417,8 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
               exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
               className={`
                   w-14 px-3 py-1 text-xs font-bold text-center rounded-full shadow-lg
-                  bg-slate-900/70 backdrop-blur-sm
-                  border border-white/10
+                  bg-slate-900/50 backdrop-blur-sm
+                  
                   ${getMultiplierTextColor(parseFloat(game.multiplier.replace("x", "")))}
                 `}
             >

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Difficulty, RiskLevel, Ball, GameResult } from "../types/game";
 import { useContracts } from "./useContracts";
 
@@ -7,10 +7,15 @@ const SPACING = 45;
 const MIN_DELAY_MS = 200; // The fastest possible time between ball drops
 const MAX_DELAY_MS = 500; // The slowest possible time between ball drops
 
-export const usePlinkoGame = (userAddress: string) => {
+export const usePlinkoGame = (
+    userAddress: string,
+    difficulty: Difficulty,
+    riskLevel: RiskLevel
+) => {
     const [balls, setBalls] = useState<Ball[]>([]);
     const [gameHistory, setGameHistory] = useState<GameResult[]>([]);
     const [pendingResults, setPendingResults] = useState<GameResult[]>([]);
+    const pendingDropTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
     const {
         plinkBalance,
@@ -22,6 +27,14 @@ export const usePlinkoGame = (userAddress: string) => {
         refreshBalance,
         getGameHistory,
     } = useContracts(userAddress);
+
+    useEffect(() => {
+        setBalls([]);
+        setPendingResults([]);
+        pendingDropTimeoutsRef.current.forEach(clearTimeout);
+        pendingDropTimeoutsRef.current = [];
+        refreshBalance();
+    }, [difficulty, riskLevel, refreshBalance]);
 
     useEffect(() => {
         const fetchInitialHistory = async () => {
@@ -76,7 +89,7 @@ export const usePlinkoGame = (userAddress: string) => {
             difficulty: Difficulty,
             riskLevel: RiskLevel,
             betAmount: string,
-            numberOfBalls: number // New parameter
+            numberOfBalls: number
         ) => {
             if (!contractsValid) {
                 throw new Error("Contracts not configured.");
@@ -106,7 +119,7 @@ export const usePlinkoGame = (userAddress: string) => {
                     gameResults.forEach((result) => {
                         // Schedule the creation of the current ball using the current cumulative delay.
                         // For the first ball, this will be 0, so it drops instantly.
-                        setTimeout(() => {
+                        const timeoutId = setTimeout(() => {
                             const newBall: Ball = {
                                 id: result.ballId,
                                 path: result.path,
@@ -120,6 +133,8 @@ export const usePlinkoGame = (userAddress: string) => {
                             };
                             setBalls((prev) => [...prev, newBall]);
                         }, cumulativeDelay);
+
+                        pendingDropTimeoutsRef.current.push(timeoutId);
 
                         // Then, calculate a random interval for the *next* ball and add it to the total.
                         const randomInterval =
