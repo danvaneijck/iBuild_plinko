@@ -509,4 +509,111 @@ mod tests {
 
         assert_eq!(stats.house_balance, expected_house_balance);
     }
+    
+    #[test]
+    fn test_daily_leaderboard_logic_and_reset() {
+        let mut deps = mock_deps();
+        let admin = deps.api.addr_make("admin");
+        setup_contract(deps.as_mut(), &admin).unwrap();
+        fund_contract(deps.as_mut(), Uint128::new(1000_000000000000000000));
+    
+        let player1 = Addr::unchecked("player1");
+        let player2 = Addr::unchecked("player2");
+        let mut env = mock_env();
+    
+        // --- Day 1 ---
+        // Player 1 plays, wagering 100
+        let msg = ExecuteMsg::Play { difficulty: Difficulty::Easy, risk_level: RiskLevel::Low };
+        let info = message_info(&player1, &coins(100_000000000000000000, TOKEN_DENOM));
+        execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
+    
+        // Player 1 plays again, wagering 50
+        let info = message_info(&player1, &coins(50_000000000000000000, TOKEN_DENOM));
+        execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
+    
+        // Check Daily Leaderboard for Day 1
+        let query_daily_msg = QueryMsg::DailyLeaderboard {
+            leaderboard_type: LeaderboardType::TotalWagered,
+            limit: Some(10),
+        };
+        let res = query(deps.as_ref(), env.clone(), query_daily_msg.clone()).unwrap();
+        let daily_lb: LeaderboardResponse = from_json(&res).unwrap();
+        assert_eq!(daily_lb.entries.len(), 1);
+        assert_eq!(daily_lb.entries[0].player, player1);
+        assert_eq!(daily_lb.entries[0].value, Uint128::new(150_000000000000000000)); // 100 + 50
+    
+        // --- Advance time by 1 day ---
+        env.block.time = env.block.time.plus_seconds(86401); // 1 day + 1 second
+    
+        // Querying before a new play should show an empty board because the query itself checks for reset
+        let res = query(deps.as_ref(), env.clone(), query_daily_msg.clone()).unwrap();
+        let daily_lb: LeaderboardResponse = from_json(&res).unwrap();
+        assert_eq!(daily_lb.entries.len(), 0);
+    
+        // --- Day 2 ---
+        // Player 2 plays, wagering 200. This tx will trigger the state-changing reset.
+        let info = message_info(&player2, &coins(200_000000000000000000, TOKEN_DENOM));
+        execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
+    
+        // Check Daily Leaderboard for Day 2
+        let res = query(deps.as_ref(), env.clone(), query_daily_msg.clone()).unwrap();
+        let daily_lb: LeaderboardResponse = from_json(&res).unwrap();
+        assert_eq!(daily_lb.entries.len(), 1);
+        assert_eq!(daily_lb.entries[0].player, player2);
+        assert_eq!(daily_lb.entries[0].value, Uint128::new(200_000000000000000000)); // Only player2's score
+    
+        // Check that Global Leaderboard was NOT reset
+        let query_global_msg = QueryMsg::GlobalLeaderboard {
+            leaderboard_type: LeaderboardType::TotalWagered,
+            limit: Some(10),
+        };
+        let res = query(deps.as_ref(), env.clone(), query_global_msg).unwrap();
+        let global_lb: LeaderboardResponse = from_json(&res).unwrap();
+        assert_eq!(global_lb.entries.len(), 2);
+        assert_eq!(global_lb.entries[0].player, player2); // Player 2 has wagered more overall now
+        assert_eq!(global_lb.entries[0].value, Uint128::new(200_000000000000000000));
+        assert_eq!(global_lb.entries[1].player, player1); // Player 1 is second
+        assert_eq!(global_lb.entries[1].value, Uint128::new(150_000000000000000000));
+    }
+
+    #[test]
+    fn test_leaderboard_sorting_and_updates() {
+        let mut deps = mock_deps();
+        let admin = deps.api.addr_make("admin");
+        setup_contract(deps.as_mut(), &admin).unwrap();
+        fund_contract(deps.as_mut(), Uint128::new(1000_000000000000000000));
+
+        let player1 = Addr::unchecked("player1");
+        let player2 = Addr::unchecked("player2");
+
+        // P1 wagers 100
+        let msg = ExecuteMsg::Play { difficulty: Difficulty::Easy, risk_level: RiskLevel::Low };
+        let info = message_info(&player1, &coins(100_000000000000000000, TOKEN_DENOM));
+        execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
+
+        // P2 wagers 200
+        let info = message_info(&player2, &coins(200_000000000000000000, TOKEN_DENOM));
+        execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
+
+        // Check leaderboard - P2 should be first
+        let query_msg = QueryMsg::GlobalLeaderboard { leaderboard_type: LeaderboardType::TotalWagered, limit: Some(10) };
+        let res = query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap();
+        let leaderboard: LeaderboardResponse = from_json(&res).unwrap();
+        assert_eq!(leaderboard.entries.len(), 2);
+        assert_eq!(leaderboard.entries[0].player, player2);
+        assert_eq!(leaderboard.entries[1].player, player1);
+
+        // P1 wagers another 150, for a total of 250
+        let info = message_info(&player1, &coins(150_000000000000000000, TOKEN_DENOM));
+        execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
+
+        // Check leaderboard again - P1 should now be first
+        let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let leaderboard: LeaderboardResponse = from_json(&res).unwrap();
+        assert_eq!(leaderboard.entries.len(), 2);
+        assert_eq!(leaderboard.entries[0].player, player1);
+        assert_eq!(leaderboard.entries[0].value, Uint128::new(250_000000000000000000));
+        assert_eq!(leaderboard.entries[1].player, player2);
+        assert_eq!(leaderboard.entries[1].value, Uint128::new(200_000000000000000000));
+    }
 }

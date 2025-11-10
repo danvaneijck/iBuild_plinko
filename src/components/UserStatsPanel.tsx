@@ -56,7 +56,7 @@ export const UserStatsPanel = () => {
     if (!stats) return
 
     return (
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3 fade-in">
             <h3 className="text-base font-bold text-white mb-2">Your Stats</h3>
             <StatItem icon={<User size={16} />} label="Games Played" value={stats.total_games?.toLocaleString() || '0'} />
             <StatItem icon={<TrendingUp size={16} />} label="Total Wagered" value={`${formatStatValue(stats.total_wagered)} PLINK`} />

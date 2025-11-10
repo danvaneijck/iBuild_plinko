@@ -25,7 +25,6 @@ const formatValue = (value: string, type: LeaderboardType) => {
 };
 
 export const Leaderboard = () => {
-    const { isConnected } = useWallet();
     const [scope, setScope] = useState<LeaderboardScope>('global');
     const [type, setType] = useState<LeaderboardType>('bestWins');
     const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -33,7 +32,6 @@ export const Leaderboard = () => {
     const [error, setError] = useState<string | null>(null);
 
     const fetchLeaderboard = useCallback(async () => {
-        if (!isConnected) return;
 
         setIsLoading(true);
         setError(null);
@@ -54,7 +52,7 @@ export const Leaderboard = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [isConnected, scope, type]);
+    }, [scope, type]);
 
     useEffect(() => {
         fetchLeaderboard();
@@ -72,7 +70,7 @@ export const Leaderboard = () => {
         }
 
         return (
-            <ul className="space-y-2">
+            <ul className="space-y-2 fade-in">
                 {entries.map((entry, index) => (
                     <li key={index} className="flex items-center justify-between bg-gray-900/50 p-3 rounded-lg">
                         <div className="flex items-center gap-4">
@@ -92,7 +90,7 @@ export const Leaderboard = () => {
     };
 
     return (
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-4">
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-4 fade-in">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Crown size={20} className="text-yellow-400" />
                 Leaderboard
@@ -133,7 +131,7 @@ export const Leaderboard = () => {
             </div>
 
             {/* Entries List */}
-            <div className="h-80 overflow-y-auto pr-2">
+            <div className="h-80 overflow-y-auto pr-2 scrollbar-hide">
                 {renderEntries()}
             </div>
         </div>

@@ -11,13 +11,13 @@ interface GameHistoryProps {
 
 export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3 fade-in">
       <div className="flex items-center gap-2 mb-6">
         <History className="text-purple-500" size={24} />
         <h2 className="text-2xl font-bold text-white">Your Games</h2>
       </div>
 
-      <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+      <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-hide">
         {history.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No games played yet. Start playing to see your history!
@@ -37,7 +37,7 @@ export const GameHistory: React.FC<GameHistoryProps> = ({ history }) => {
 
               return (
                 <motion.div
-                  key={result.ballId || result.timestamp + i} // Use a stable unique key like ballId
+                  key={result.ballId} // Use a stable unique key like ballId
                   layout
                   initial={{ opacity: 0, y: -20, scale: 0.95 }} // Start invisible and slightly above
                   animate={{ opacity: 1, y: 0, scale: 1 }} // Animate to fully visible and in place

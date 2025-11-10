@@ -12,6 +12,7 @@ const SPACING = 45;
 const BUCKET_HEIGHT = 40; // Height of the buckets at the bottom
 const STEERING_FACTOR = 0.1; // Increased for stronger steering
 const CANVAS_WIDTH = 800;
+const SOUND_THROTTLE_MS = 50;
 
 // --- Type extension for Matter.Body ---
 // This lets us attach our game-specific data directly to the physics body
@@ -30,14 +31,6 @@ interface PlinkoBoardProps {
   gameHistory: GameResult[];
   onAnimationComplete: (ballId: string) => void;
 }
-
-// --- New Color Function for Canvas ---
-const getMultiplierColorForCss = (multiplier: number) => {
-  if (multiplier >= 100) return 'from-yellow-500 to-orange-500';
-  if (multiplier >= 10) return 'from-green-500 to-emerald-500';
-  if (multiplier >= 1) return 'from-blue-500 to-cyan-500';
-  return 'from-red-500 to-pink-500';
-};
 
 // This function is for canvas drawing
 const getMultiplierColorForCanvas = (multiplier: number) => {
@@ -81,6 +74,8 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioPoolRef = useRef<HTMLAudioElement[]>([]);
   const currentAudioIndexRef = useRef(0);
+  const isSoundThrottledRef = useRef(false);
+  const soundTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const toggleMute = () => {
     isMutedRef.current = !isMutedRef.current;
@@ -184,7 +179,7 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
       const bucketWidth = SPACING;
       const totalBucketsWidth = multipliers.length * bucketWidth;
       const bucketsStartX = (CANVAS_WIDTH - totalBucketsWidth) / 2;
-      const textY = rows * SPACING + BUCKET_HEIGHT + 15; // Vertical position for the text
+      const textY = rows * SPACING + BUCKET_HEIGHT + 20; // Vertical position for the text
 
       ctx.font = 'bold 18px Arial';
       ctx.textAlign = 'center';
@@ -201,14 +196,26 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
 
 
     const playHitSound = () => {
+      // 1. If we are in the "cooldown" period, do nothing.
+      if (isSoundThrottledRef.current) {
+        return;
+      }
+
       if (!isMutedRef.current) {
         const audio = audioPoolRef.current[currentAudioIndexRef.current];
         if (audio) {
           audio.currentTime = 0;
           audio.play().catch(error => console.error("Audio play failed:", error));
         }
-        // Move to the next audio element in the pool
         currentAudioIndexRef.current = (currentAudioIndexRef.current + 1) % AUDIO_POOL_SIZE;
+
+        // 2. Start the cooldown period.
+        isSoundThrottledRef.current = true;
+
+        // 3. Set a timer to end the cooldown period after the delay.
+        soundTimeoutRef.current = setTimeout(() => {
+          isSoundThrottledRef.current = false;
+        }, SOUND_THROTTLE_MS);
       }
     };
 
@@ -228,6 +235,7 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
 
         if (ballBody && pegBody) {
           playHitSound();
+
           const [_, pegRowStr, pegIndexStr] = pegBody.label.split('-');
           const pegRow = parseInt(pegRowStr);
           const pegIndex = parseInt(pegIndexStr);
@@ -287,6 +295,9 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
     Matter.Render.run(render);
 
     return () => {
+      if (soundTimeoutRef.current) {
+        clearTimeout(soundTimeoutRef.current);
+      }
       // --- Cleanup ---
       Matter.Events.off(render, 'afterRender', drawMultipliers); // Remove the event listener
       Matter.Render.stop(render);
@@ -313,6 +324,9 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
             label: 'ball',
             restitution: 0.6,
             render: { fillStyle: '#ec4899' },
+            collisionFilter: {
+              group: -1,
+            },
           }
         ) as PlinkoBallBody;
 
@@ -356,7 +370,7 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
   }, [rows, onAnimationComplete]);
 
   return (
-    <div className="relative">
+    <div className="relative fade-in">
       <canvas
         ref={canvasRef}
         key={rows}
@@ -384,33 +398,30 @@ export const PlinkoBoard: React.FC<PlinkoBoardProps> = ({
         </button>
       </div>
 
-      {/* --- UPDATED: Game History Display with Animations --- */}
-      {/* <div
-        ref={historyContainerRef} // Attach the ref here
-        className="absolute top-4 left-4 flex flex-col-reverse gap-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide"
+      <div
+        ref={historyContainerRef}
+        className="absolute top-4 left-4 flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide"
       >
         <AnimatePresence>
-          {gameHistory.sort((a, b) => (b.timestamp - a.timestamp) || ((a.eventIndex ?? 0) - (b.eventIndex ?? 0)))
-            .slice(-10).reverse().map((game, index) => (
-              <motion.div
-                key={game.ballId || game.timestamp + index}
-                layout
-                initial={{ opacity: 0, y: -20, scale: 0.8 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-                className={`
-                w-14 px-3 py-1 text-xs font-bold text-center rounded-full shadow-lg
-                bg-slate-900/70 backdrop-blur-sm
-                border border-white/10
-                origin-bottom
-                ${getMultiplierTextColor(game.multiplier)}
-              `}
-              >
-                {game.multiplier}
-              </motion.div>
-            ))}
+          {gameHistory.slice(0, 20).map((game) => (
+            <motion.div
+              key={game.ballId}
+              layout
+              initial={{ opacity: 0, x: -20, scale: 0.8 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
+              className={`
+                  w-14 px-3 py-1 text-xs font-bold text-center rounded-full shadow-lg
+                  bg-slate-900/70 backdrop-blur-sm
+                  border border-white/10
+                  ${getMultiplierTextColor(parseFloat(game.multiplier.replace("x", "")))}
+                `}
+            >
+              {game.multiplier}
+            </motion.div>
+          ))}
         </AnimatePresence>
-      </div> */}
+      </div>
     </div>
   );
 };

@@ -128,7 +128,7 @@ function App() {
         {renderErrorMessages()}
 
         {!isConnected ? (
-          <div className="text-center py-20">
+          <div className="text-center py-2 md:py-10">
             <div className="w-24 h-24 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
               <Coins className="text-white" size={48} />
             </div>
@@ -136,6 +136,11 @@ function App() {
             <p className="text-gray-400 mb-8 max-w-md mx-auto">
               Connect your wallet to start playing the blockchain Plinko game with provably fair results
             </p>
+            <div className='max-w-screen-lg m-auto space-y-4'>
+              <GameStatsPanel />
+              <Leaderboard />
+            </div>
+
           </div>
         ) : (
 
@@ -169,10 +174,10 @@ function App() {
                 balls={balls}
                 difficulty={difficulty}
                 multipliers={multipliers}
-                gameHistory={[...gameHistory.sort((a, b) => (b.timestamp - a.timestamp) || ((a.eventIndex ?? 0) - (b.eventIndex ?? 0)))]}
+                gameHistory={gameHistory}
                 onAnimationComplete={onAnimationComplete}
               />
-              <div className='flex justify-center mt-4 w-full gap-2'>
+              <div className='flex justify-center mt-4 w-full gap-2 fade-in'>
                 <a href="https://ibuild.dev/" target="_blank" rel="noopener noreferrer" className="ibuild-badge-dark">
                   <span>Built using</span>
                   <img src="https://ibuild.dev/icons/ibuild_logo.svg" alt="iBuild Logo" />
@@ -194,7 +199,7 @@ function App() {
               {/* --- Game History for Mobile --- */}
               {gameHistory && gameHistory.length > 0 &&
                 <div className="lg:hidden">
-                  <GameHistory history={[...gameHistory.sort((a, b) => (b.timestamp - a.timestamp) || ((a.eventIndex ?? 0) - (b.eventIndex ?? 0)))]} />
+                  <GameHistory history={gameHistory} />
                 </div>
               }
               <Leaderboard />
