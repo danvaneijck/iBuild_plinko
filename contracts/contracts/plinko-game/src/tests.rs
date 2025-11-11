@@ -5,8 +5,9 @@ mod tests {
     use crate::msg::{
         ConfigResponse, Difficulty, ExecuteMsg, HistoryResponse, InstantiateMsg,
         LeaderboardResponse, LeaderboardType, QueryMsg, RiskLevel, StatsResponse,
-        UserStatsResponse,
+        UserStatsResponse, WinnablePrizeResponse,
     };
+    use crate::state::DAILY_STATS;
     use cosmwasm_std::testing::{message_info, mock_env, MockApi, MockQuerier, MockStorage};
     use cosmwasm_std::{
         coin, coins, from_json, Addr, BankMsg, DepsMut, OwnedDeps, Response, Uint128,
@@ -30,6 +31,9 @@ mod tests {
         let msg = InstantiateMsg {
             token_denom: TOKEN_DENOM.to_string(),
             funder_address: admin.to_string(),
+            prize_pool_percentage: 10,     // e.g., 10%
+            claim_period_seconds: 604_800, // 7 days
+            prize_leaderboard_type: LeaderboardType::BestWins,
         };
 
         let info = message_info(admin, &[]);
@@ -509,28 +513,31 @@ mod tests {
 
         assert_eq!(stats.house_balance, expected_house_balance);
     }
-    
+
     #[test]
     fn test_daily_leaderboard_logic_and_reset() {
         let mut deps = mock_deps();
         let admin = deps.api.addr_make("admin");
         setup_contract(deps.as_mut(), &admin).unwrap();
         fund_contract(deps.as_mut(), Uint128::new(1000_000000000000000000));
-    
+
         let player1 = Addr::unchecked("player1");
         let player2 = Addr::unchecked("player2");
         let mut env = mock_env();
-    
+
         // --- Day 1 ---
         // Player 1 plays, wagering 100
-        let msg = ExecuteMsg::Play { difficulty: Difficulty::Easy, risk_level: RiskLevel::Low };
+        let msg = ExecuteMsg::Play {
+            difficulty: Difficulty::Easy,
+            risk_level: RiskLevel::Low,
+        };
         let info = message_info(&player1, &coins(100_000000000000000000, TOKEN_DENOM));
         execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
-    
+
         // Player 1 plays again, wagering 50
         let info = message_info(&player1, &coins(50_000000000000000000, TOKEN_DENOM));
         execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
-    
+
         // Check Daily Leaderboard for Day 1
         let query_daily_msg = QueryMsg::DailyLeaderboard {
             leaderboard_type: LeaderboardType::TotalWagered,
@@ -540,28 +547,34 @@ mod tests {
         let daily_lb: LeaderboardResponse = from_json(&res).unwrap();
         assert_eq!(daily_lb.entries.len(), 1);
         assert_eq!(daily_lb.entries[0].player, player1);
-        assert_eq!(daily_lb.entries[0].value, Uint128::new(150_000000000000000000)); // 100 + 50
-    
+        assert_eq!(
+            daily_lb.entries[0].value,
+            Uint128::new(150_000000000000000000)
+        ); // 100 + 50
+
         // --- Advance time by 1 day ---
         env.block.time = env.block.time.plus_seconds(86401); // 1 day + 1 second
-    
+
         // Querying before a new play should show an empty board because the query itself checks for reset
         let res = query(deps.as_ref(), env.clone(), query_daily_msg.clone()).unwrap();
         let daily_lb: LeaderboardResponse = from_json(&res).unwrap();
         assert_eq!(daily_lb.entries.len(), 0);
-    
+
         // --- Day 2 ---
         // Player 2 plays, wagering 200. This tx will trigger the state-changing reset.
         let info = message_info(&player2, &coins(200_000000000000000000, TOKEN_DENOM));
         execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap();
-    
+
         // Check Daily Leaderboard for Day 2
         let res = query(deps.as_ref(), env.clone(), query_daily_msg.clone()).unwrap();
         let daily_lb: LeaderboardResponse = from_json(&res).unwrap();
         assert_eq!(daily_lb.entries.len(), 1);
         assert_eq!(daily_lb.entries[0].player, player2);
-        assert_eq!(daily_lb.entries[0].value, Uint128::new(200_000000000000000000)); // Only player2's score
-    
+        assert_eq!(
+            daily_lb.entries[0].value,
+            Uint128::new(200_000000000000000000)
+        ); // Only player2's score
+
         // Check that Global Leaderboard was NOT reset
         let query_global_msg = QueryMsg::GlobalLeaderboard {
             leaderboard_type: LeaderboardType::TotalWagered,
@@ -571,9 +584,15 @@ mod tests {
         let global_lb: LeaderboardResponse = from_json(&res).unwrap();
         assert_eq!(global_lb.entries.len(), 2);
         assert_eq!(global_lb.entries[0].player, player2); // Player 2 has wagered more overall now
-        assert_eq!(global_lb.entries[0].value, Uint128::new(200_000000000000000000));
+        assert_eq!(
+            global_lb.entries[0].value,
+            Uint128::new(200_000000000000000000)
+        );
         assert_eq!(global_lb.entries[1].player, player1); // Player 1 is second
-        assert_eq!(global_lb.entries[1].value, Uint128::new(150_000000000000000000));
+        assert_eq!(
+            global_lb.entries[1].value,
+            Uint128::new(150_000000000000000000)
+        );
     }
 
     #[test]
@@ -587,7 +606,10 @@ mod tests {
         let player2 = Addr::unchecked("player2");
 
         // P1 wagers 100
-        let msg = ExecuteMsg::Play { difficulty: Difficulty::Easy, risk_level: RiskLevel::Low };
+        let msg = ExecuteMsg::Play {
+            difficulty: Difficulty::Easy,
+            risk_level: RiskLevel::Low,
+        };
         let info = message_info(&player1, &coins(100_000000000000000000, TOKEN_DENOM));
         execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
 
@@ -596,7 +618,10 @@ mod tests {
         execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
 
         // Check leaderboard - P2 should be first
-        let query_msg = QueryMsg::GlobalLeaderboard { leaderboard_type: LeaderboardType::TotalWagered, limit: Some(10) };
+        let query_msg = QueryMsg::GlobalLeaderboard {
+            leaderboard_type: LeaderboardType::TotalWagered,
+            limit: Some(10),
+        };
         let res = query(deps.as_ref(), mock_env(), query_msg.clone()).unwrap();
         let leaderboard: LeaderboardResponse = from_json(&res).unwrap();
         assert_eq!(leaderboard.entries.len(), 2);
@@ -612,8 +637,145 @@ mod tests {
         let leaderboard: LeaderboardResponse = from_json(&res).unwrap();
         assert_eq!(leaderboard.entries.len(), 2);
         assert_eq!(leaderboard.entries[0].player, player1);
-        assert_eq!(leaderboard.entries[0].value, Uint128::new(250_000000000000000000));
+        assert_eq!(
+            leaderboard.entries[0].value,
+            Uint128::new(250_000000000000000000)
+        );
         assert_eq!(leaderboard.entries[1].player, player2);
-        assert_eq!(leaderboard.entries[1].value, Uint128::new(200_000000000000000000));
+        assert_eq!(
+            leaderboard.entries[1].value,
+            Uint128::new(200_000000000000000000)
+        );
+    }
+
+    #[test]
+    fn test_prize_pool_lifecycle() {
+        let mut deps = mock_deps();
+        let admin = deps.api.addr_make("admin");
+        let winner = deps.api.addr_make("winner");
+        let player2 = deps.api.addr_make("player2");
+        let non_winner = deps.api.addr_make("non_winner");
+
+        // 1. SETUP
+        setup_contract(deps.as_mut(), &admin).unwrap();
+        fund_contract(deps.as_mut(), Uint128::new(1_000_000_000));
+        let mut env = mock_env();
+
+        // --- DAY 1: Simulate plays UNTIL the house is profitable ---
+        let mut house_is_profitable = false;
+        // We loop up to 20 times as a safeguard. In practice, it will likely pass in 1-2 iterations.
+        for i in 0..20 {
+            // Manipulate the env slightly on each attempt to get a different "random" path
+            env.block.time = env.block.time.plus_seconds(i);
+
+            execute(
+                deps.as_mut(),
+                env.clone(),
+                message_info(&winner, &coins(100, TOKEN_DENOM)), // Winner plays a small game
+                ExecuteMsg::Play {
+                    difficulty: Difficulty::Easy,
+                    risk_level: RiskLevel::Low,
+                },
+            )
+            .unwrap();
+
+            let day1_stats = DAILY_STATS.load(deps.as_ref().storage).unwrap();
+            if day1_stats.total_wagered > day1_stats.total_won {
+                house_is_profitable = true;
+                break; // Exit the loop as soon as the house is profitable
+            }
+        }
+
+        // This is the crucial check. If this fails, something is fundamentally wrong with the game math.
+        assert!(
+            house_is_profitable,
+            "House did not become profitable after 20 attempts. Check game logic."
+        );
+
+        // Now that the house is profitable, have player2 play to ensure winner has the higher wager/pnl
+        // and is correctly placed at #1 on the leaderboard.
+        execute(
+            deps.as_mut(),
+            env.clone(),
+            message_info(&player2, &coins(50, TOKEN_DENOM)),
+            ExecuteMsg::Play {
+                difficulty: Difficulty::Easy,
+                risk_level: RiskLevel::Low,
+            },
+        )
+        .unwrap();
+
+        // Get the final, profitable stats for Day 1
+        let final_day1_stats = DAILY_STATS.load(deps.as_ref().storage).unwrap();
+        let house_profit = final_day1_stats
+            .total_wagered
+            .saturating_sub(final_day1_stats.total_won);
+
+        // --- DAY 2: Advance time & trigger prize creation ---
+        env.block.time = env.block.time.plus_seconds(86_400);
+        execute(
+            deps.as_mut(),
+            env.clone(),
+            message_info(&non_winner, &coins(1, TOKEN_DENOM)),
+            ExecuteMsg::Play {
+                difficulty: Difficulty::Easy,
+                risk_level: RiskLevel::Low,
+            },
+        )
+        .unwrap();
+
+        // --- VERIFICATION & CLAIMING ---
+        let day_1_index = (env.block.time.seconds() / 86_400) - 1;
+
+        // 2. CHECK WINNER'S PRIZE
+        let prize_query_msg = QueryMsg::WinnablePrize {
+            player: winner.to_string(),
+            day_index: day_1_index,
+        };
+        let res: WinnablePrizeResponse =
+            from_json(&query(deps.as_ref(), env.clone(), prize_query_msg).unwrap()).unwrap();
+
+        let total_prize_pool = house_profit.multiply_ratio(10u128, 100u128); // 10% from config
+        let expected_prize = total_prize_pool.multiply_ratio(50u128, 100u128); // 50% for 1st
+
+        assert!(res.is_winner, "The top player should be marked as a winner");
+        assert_eq!(res.rank, 1);
+        assert_eq!(res.prize_amount, expected_prize);
+
+        // 3. CLAIM PRIZE
+        let claim_msg = ExecuteMsg::ClaimDailyPrize {
+            day_index: day_1_index,
+        };
+        execute(
+            deps.as_mut(),
+            env.clone(),
+            message_info(&winner, &[]),
+            claim_msg.clone(),
+        )
+        .unwrap();
+
+        // 4. ATTEMPT DOUBLE CLAIM
+        let err = execute(
+            deps.as_mut(),
+            env.clone(),
+            message_info(&winner, &[]),
+            claim_msg,
+        )
+        .unwrap_err();
+        assert_eq!(err, ContractError::PrizeAlreadyClaimed {});
+
+        // 5. CHECK EXPIRATION
+        env.block.time = env.block.time.plus_seconds(604_801); // 7 days + 1 second
+        let claim_msg_p2 = ExecuteMsg::ClaimDailyPrize {
+            day_index: day_1_index,
+        };
+        let err_expired = execute(
+            deps.as_mut(),
+            env,
+            message_info(&player2, &[]),
+            claim_msg_p2,
+        )
+        .unwrap_err();
+        assert_eq!(err_expired, ContractError::ClaimPeriodExpired {});
     }
 }

@@ -5,6 +5,9 @@ use cosmwasm_std::{Addr, Uint128};
 pub struct InstantiateMsg {
     pub token_denom: String,
     pub funder_address: String,
+    pub prize_pool_percentage: u8,
+    pub claim_period_seconds: u64,
+    pub prize_leaderboard_type: LeaderboardType,
 }
 
 #[cw_serde]
@@ -20,6 +23,14 @@ pub enum ExecuteMsg {
     /// This message must be sent with the native tokens to be funded.
     FundHouse {},
     SyncBalance {},
+    ClaimDailyPrize {
+        day_index: u64,
+    },
+    UpdatePrizeConfig {
+        prize_pool_percentage: Option<u8>,
+        claim_period_seconds: Option<u64>,
+        prize_leaderboard_type: Option<LeaderboardType>,
+    },
 }
 
 #[cw_serde]
@@ -43,6 +54,8 @@ pub enum QueryMsg {
         leaderboard_type: LeaderboardType,
         limit: Option<u32>,
     },
+    #[returns(WinnablePrizeResponse)]
+    WinnablePrize { player: String, day_index: u64 },
 }
 
 #[cw_serde]
@@ -69,6 +82,18 @@ pub enum LeaderboardType {
 pub struct ConfigResponse {
     pub token_denom: String,
     pub admin: Addr,
+    pub prize_pool_percentage: u8,
+    pub claim_period_seconds: u64,
+    pub prize_leaderboard_type: LeaderboardType,
+}
+
+#[cw_serde]
+pub struct WinnablePrizeResponse {
+    pub is_winner: bool,
+    pub prize_amount: Uint128,
+    pub has_claimed: bool,
+    pub claim_expired: bool,
+    pub rank: u8, // 1, 2, or 3. 0 if not a winner.
 }
 
 #[cw_serde]

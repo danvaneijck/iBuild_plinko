@@ -29,4 +29,19 @@ pub enum ContractError {
 
     #[error("Insufficient house balance to pay out winnings")]
     InsufficientHouseBalance {},
+
+    #[error("Invalid percentage: must be between 0 and 100")]
+    InvalidPercentage {},
+
+    #[error("There is no prize available to claim for the specified day")]
+    NoPrizeToClaim {},
+
+    #[error("Prize for this day has already been claimed")]
+    PrizeAlreadyClaimed {},
+
+    #[error("You were not a top 3 winner on the specified day")]
+    NotAWinner {},
+
+    #[error("The claim period for this prize has expired")]
+    ClaimPeriodExpired {},
 }

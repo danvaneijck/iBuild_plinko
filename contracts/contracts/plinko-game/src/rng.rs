@@ -8,13 +8,18 @@ pub fn generate_ball_path(env: &Env, info: &MessageInfo, nonce: u64, rows: u8) -
 
     // Create seed from multiple sources
     let mut hasher = Sha256::new();
-    hasher.update(env.transaction.as_ref().map(|tx| tx.index.to_be_bytes()).unwrap_or([0u8; 4]));
+    hasher.update(
+        env.transaction
+            .as_ref()
+            .map(|tx| tx.index.to_be_bytes())
+            .unwrap_or([0u8; 4]),
+    );
     hasher.update(env.block.height.to_be_bytes());
     hasher.update(env.block.time.nanos().to_be_bytes());
     hasher.update(info.sender.as_bytes());
     hasher.update(nonce.to_be_bytes());
     hasher.update(env.contract.address.as_bytes());
-    
+
     if let Some(coin) = info.funds.first() {
         hasher.update(coin.amount.u128().to_be_bytes());
     }
